@@ -33,7 +33,7 @@ The script activates on these domains:
 1. Install [Tampermonkey](https://www.tampermonkey.net/) for your browser (Chrome, Edge, Firefox, Safari all supported).
 2. Open the raw userscript URL:
    ```
-   https://code.amazon.com/packages/APMRPGUserScript/blobs/mainline/--/apm-rpg.user.js/raw
+   https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/apm-rpg.user.js
    ```
 3. Tampermonkey will detect the `.user.js` extension and show an install prompt. Click **Install**.
 4. Navigate to an APM/PTP tab. The RPG panel appears at the top-left of the page.
@@ -147,10 +147,10 @@ Push to Gitfarm:
 ```
 git add apm-rpg.user.js
 git commit -m "vX.Y.Z: <summary>"
-git push origin mainline
+git push origin main
 ```
 
-The raw URL updates immediately. Users on `< X.Y.Z` will see the update button within an hour (or on their next page load if their cache is stale).
+The raw URL refreshes within seconds of the push (GitHub CDN cache). Users on `< X.Y.Z` will see the update button within an hour (or on their next page load if their cache is stale).
 
 ## Compatibility
 

@@ -15,9 +15,10 @@
 // @grant        GM_deleteValue
 // @grant        GM_addStyle
 // @grant        GM_xmlhttpRequest
-// @connect      *
-// @updateURL    https://REPLACE_ME_HOST/apm-rpg.user.js
-// @downloadURL  https://REPLACE_ME_HOST/apm-rpg.user.js
+// @grant        unsafeWindow
+// @connect      raw.githubusercontent.com
+// @updateURL    https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/apm-rpg.user.js
+// @downloadURL  https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/apm-rpg.user.js
 // ==/UserScript==
 
 (function () {
@@ -69,11 +70,11 @@
   const WILD_SPAWN_TICK_MS = 15000;
   const WILD_SPAWN_CHANCE  = 0.03;  // rolled once per page load / SPA nav
   const CATCHERS_PER_SPAWN = 3;
-  // Hosted update-check. Replace REPLACE_ME_HOST once the script is hosted.
-  // Same URL is fine for @updateURL / @downloadURL — Tampermonkey only parses the
-  // header on update polls.
-  const UPDATE_META_URL     = 'https://REPLACE_ME_HOST/apm-rpg.user.js';
-  const UPDATE_DOWNLOAD_URL = 'https://REPLACE_ME_HOST/apm-rpg.user.js';
+  // Hosted at https://github.com/josiahbailey/APM_RPG (public GitHub).
+  // Same URL for @updateURL and @downloadURL — Tampermonkey only reads the
+  // metadata block on update polls, then fetches the full file on install.
+  const UPDATE_META_URL     = 'https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/apm-rpg.user.js';
+  const UPDATE_DOWNLOAD_URL = 'https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/apm-rpg.user.js';
   const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
   const UPDATE_CACHE_KEY    = 'apm_rpg_update_v1';
   // Variant rarities. Each spawn independently rolls for the rarest tier down.
@@ -1168,7 +1169,7 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
 
-  window.APM_RPG = {
+  const APM_RPG_API = {
     grantXP: (n) => grantPlayerXP(n || 50, 'debug'),
     setLevel: (lvl) => { state.player.level = Math.max(1, lvl|0); state.player.xp = 0; persistPlayer(); renderPanel(); respawnAllRoamers(); },
     spawn: () => spawnWild(),
@@ -1183,4 +1184,6 @@
     checkUpdate: () => checkForUpdate(true),
     updateInfo: () => ({ local: LOCAL_VERSION, latest: updateInfo.latest, available: updateInfo.available, checkedAt: new Date(updateInfo.checkedAt).toISOString(), url: UPDATE_DOWNLOAD_URL }),
   };
+  window.APM_RPG = APM_RPG_API;
+  try { if (typeof unsafeWindow !== 'undefined') unsafeWindow.APM_RPG = APM_RPG_API; } catch (e) {}
 })();
