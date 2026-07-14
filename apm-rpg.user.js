@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.5.0
+// @version      0.5.3
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -1184,6 +1184,67 @@
     checkUpdate: () => checkForUpdate(true),
     updateInfo: () => ({ local: LOCAL_VERSION, latest: updateInfo.latest, available: updateInfo.available, checkedAt: new Date(updateInfo.checkedAt).toISOString(), url: UPDATE_DOWNLOAD_URL }),
   };
+  // Sandbox-context handle (works from Tampermonkey's isolated context).
   window.APM_RPG = APM_RPG_API;
-  try { if (typeof unsafeWindow !== 'undefined') unsafeWindow.APM_RPG = APM_RPG_API; } catch (e) {}
+
+  // Page-context bridge: Chrome's isolated worlds silently block cross-context
+  // property writes via unsafeWindow, so instead we inject a proxy into the page
+  // and communicate via postMessage. Methods become async on the page side.
+  const APM_RPG_METHODS = ['grantXP','setLevel','spawn','spawnVariant','rollSpawn','despawn','detect','setUsername','reset','checkUpdate','updateInfo'];
+
+  window.addEventListener('message', (e) => {
+    if (e.source !== window || !e.data || e.data.__apm_rpg !== 'call') return;
+    const req = e.data;
+    let result, error;
+    try {
+      const target = APM_RPG_API[req.method];
+      if (typeof target === 'function') {
+        result = target.apply(APM_RPG_API, req.args || []);
+      } else if (req.method === 'state') {
+        result = APM_RPG_API.state;
+      } else {
+        result = target;
+      }
+      try { result = JSON.parse(JSON.stringify(result === undefined ? null : result)); }
+      catch (err) { result = String(result); }
+    } catch (err) {
+      error = String((err && err.message) || err);
+    }
+    window.postMessage({ __apm_rpg: 'result', id: req.id, result: result, error: error }, '*');
+  });
+
+  const injectPageBridge = () => {
+    const script = document.createElement('script');
+    script.setAttribute('data-apm-rpg-bridge', '1');
+    script.textContent =
+      '(function(){' +
+        'if(window.APM_RPG&&window.APM_RPG.__bridge)return;' +
+        'var pending=new Map();' +
+        'window.addEventListener("message",function(e){' +
+          'if(e.source!==window||!e.data||e.data.__apm_rpg!=="result")return;' +
+          'var p=pending.get(e.data.id);' +
+          'if(!p)return;' +
+          'pending.delete(e.data.id);' +
+          'if(e.data.error)p.reject(new Error(e.data.error));' +
+          'else p.resolve(e.data.result);' +
+        '});' +
+        'var call=function(method,args){' +
+          'return new Promise(function(resolve,reject){' +
+            'var id="r"+Math.random().toString(36).slice(2)+Date.now().toString(36);' +
+            'pending.set(id,{resolve:resolve,reject:reject});' +
+            'window.postMessage({__apm_rpg:"call",id:id,method:method,args:args||[]},"*");' +
+            'setTimeout(function(){if(pending.has(id)){pending.delete(id);reject(new Error("APM_RPG bridge timeout"));}},5000);' +
+          '});' +
+        '};' +
+        'var methods=' + JSON.stringify(APM_RPG_METHODS) + ';' +
+        'var api={__bridge:true};' +
+        'methods.forEach(function(m){api[m]=function(){return call(m,Array.prototype.slice.call(arguments));};});' +
+        'Object.defineProperty(api,"state",{get:function(){return call("state",[]);}});' +
+        'window.APM_RPG=api;' +
+        'console.log("%c[APM RPG]%c page bridge ready. Use: await APM_RPG.updateInfo()","color:#22c55e;font-weight:bold","color:inherit");' +
+      '})();';
+    (document.head || document.documentElement).appendChild(script);
+    script.remove();
+  };
+  try { injectPageBridge(); } catch (e) { console.error('[APM RPG] bridge injection failed', e); }
 })();
