@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.5.4
+// @version      0.5.5
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -75,7 +75,7 @@
   // metadata block on update polls, then fetches the full file on install.
   const UPDATE_META_URL     = 'https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/apm-rpg.user.js';
   const UPDATE_DOWNLOAD_URL = 'https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/apm-rpg.user.js';
-  const UPDATE_CHECK_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
+  const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;  // 5 minutes (rate limit; force=true bypasses)
   const UPDATE_CACHE_KEY    = 'apm_rpg_update_v1';
   // Variant rarities. Each spawn independently rolls for the rarest tier down.
   // 'normal' is the fallthrough — all four are catch-rate multipliers over base.
@@ -270,31 +270,59 @@
       }
     } catch (e) {}
   };
-  const checkForUpdate = (force) => {
-    if (!UPDATE_META_URL || UPDATE_META_URL.indexOf('REPLACE_ME') !== -1) return;
-    if (typeof GM_xmlhttpRequest === 'undefined') return;
+  const checkForUpdate = (force) => new Promise((resolve) => {
+    if (!UPDATE_META_URL || UPDATE_META_URL.indexOf('REPLACE_ME') !== -1) {
+      console.warn('[APM RPG] update check skipped: URL not configured');
+      return resolve({ skipped: 'url', local: LOCAL_VERSION });
+    }
+    if (typeof GM_xmlhttpRequest === 'undefined') {
+      console.warn('[APM RPG] update check skipped: GM_xmlhttpRequest not granted');
+      return resolve({ skipped: 'no-xhr', local: LOCAL_VERSION });
+    }
     const now = Date.now();
-    if (!force && (now - updateInfo.checkedAt) < UPDATE_CHECK_INTERVAL_MS) return;
+    if (!force && (now - updateInfo.checkedAt) < UPDATE_CHECK_INTERVAL_MS) {
+      const ageMin = Math.round((now - updateInfo.checkedAt) / 60000);
+      console.log('[APM RPG] update check rate-limited (last check ' + ageMin + ' min ago); use APM_RPG.checkUpdate() to force');
+      return resolve({ skipped: 'rate-limit', local: LOCAL_VERSION, latest: updateInfo.latest, available: updateInfo.available });
+    }
     try {
+      console.log('[APM RPG] checking for update...');
       GM_xmlhttpRequest({
         method: 'GET',
         url: UPDATE_META_URL + (UPDATE_META_URL.indexOf('?') === -1 ? '?' : '&') + '_=' + now,
         timeout: 15000,
         onload: (res) => {
-          if (!res || res.status !== 200 || !res.responseText) return;
+          if (!res || res.status !== 200 || !res.responseText) {
+            console.warn('[APM RPG] update check bad response:', res && res.status);
+            return resolve({ error: 'status ' + (res && res.status), local: LOCAL_VERSION });
+          }
           const m = res.responseText.match(/@version\s+([^\s\r\n]+)/);
-          if (!m) return;
+          if (!m) {
+            console.warn('[APM RPG] no @version in response');
+            return resolve({ error: 'no version parsed', local: LOCAL_VERSION });
+          }
           updateInfo.checkedAt = Date.now();
           updateInfo.latest = m[1].trim();
           updateInfo.available = cmpVersion(updateInfo.latest, LOCAL_VERSION) > 0;
           saveUpdateCache();
           if (typeof renderPanel === 'function') renderPanel();
+          console.log('[APM RPG] update check: local=' + LOCAL_VERSION + ' latest=' + updateInfo.latest + ' available=' + updateInfo.available);
+          resolve({ local: LOCAL_VERSION, latest: updateInfo.latest, available: updateInfo.available });
         },
-        onerror: () => {},
-        ontimeout: () => {}
+        onerror: (e) => {
+          console.warn('[APM RPG] update check network error', e);
+          resolve({ error: 'network', local: LOCAL_VERSION });
+        },
+        ontimeout: () => {
+          console.warn('[APM RPG] update check timeout');
+          resolve({ error: 'timeout', local: LOCAL_VERSION });
+        }
       });
-    } catch (e) {}
-  };
+    } catch (e) {
+      console.warn('[APM RPG] update check exception', e);
+      resolve({ error: String(e), local: LOCAL_VERSION });
+    }
+  });
   const variantBadge = (v) => (VARIANT_META[v] && VARIANT_META[v].badge) || '';
   const variantLabel = (v) => (VARIANT_META[v] && VARIANT_META[v].label) || 'Normal';
   const variantImgField = { shiny: 'shinyImg', gold: 'goldImg', rainbow: 'rainbowImg' };
@@ -1148,6 +1176,7 @@
   // BOOT
   // ================================================================
   const boot = () => {
+    console.log('[APM RPG] v' + LOCAL_VERSION + ' loaded');
     loadUpdateCache();
     buildPanel(); renderPanel();
     respawnAllRoamers();
