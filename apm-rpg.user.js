@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.5.5
+// @version      0.5.6
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -471,6 +471,8 @@
     '.rpg-bar>div{height:100%;background:linear-gradient(90deg,#4ade80,#22d3ee);transition:width 240ms ease}',
     '.rpg-xp-text{font-size:10px;color:#9aa;margin-top:2px}',
     '.rpg-btn{padding:4px 8px;font-size:10px;font-weight:700;border:1px solid #555;border-radius:5px;background:#2a2a36;color:#ffd166;cursor:pointer}.rpg-btn:hover{background:#3b3b48}',
+    '.rpg-right-col{display:flex;flex-direction:column;gap:4px;align-items:stretch;min-width:52px}',
+    '.rpg-version{font-size:9px;color:#666;text-align:center;letter-spacing:0.5px;font-weight:600;user-select:text}',
     '.rpg-reset-btn{position:fixed;left:12px;bottom:12px;z-index:2147483000;font-size:9px;padding:3px 7px;background:rgba(40,0,0,0.8);color:#f77;border:1px solid #633;border-radius:4px;cursor:pointer;opacity:0.5}.rpg-reset-btn:hover{opacity:1;background:#400}',
     '.rpg-update-btn{background:linear-gradient(135deg,#22c55e,#15803d)!important;color:#fff!important;border-color:#16a34a!important;animation:rpgUpdatePulse 2s ease-in-out infinite}.rpg-update-btn:hover{filter:brightness(1.15)}',
     '@keyframes rpgUpdatePulse{0%,100%{box-shadow:0 0 0 rgba(34,197,94,0)}50%{box-shadow:0 0 10px rgba(34,197,94,0.7)}}',
@@ -609,14 +611,17 @@
     el.xpTxt = $('div', { class: 'rpg-xp-text' });
     el.stats.append(el.name, el.level, el.bar, el.xpTxt);
     el.panel.appendChild(el.stats);
-    el.panel.appendChild($('button', { class: 'rpg-btn', html: 'DEX', title: 'View all discoverable pets', onclick: openDex }));
+    el.rightCol = $('div', { class: 'rpg-right-col' });
     el.updateBtn = $('button', {
       class: 'rpg-btn rpg-update-btn',
       title: 'A new version is available. Click to install.',
       onclick: () => { if (UPDATE_DOWNLOAD_URL && UPDATE_DOWNLOAD_URL.indexOf('REPLACE_ME') === -1) window.open(UPDATE_DOWNLOAD_URL, '_blank'); }
     });
     el.updateBtn.style.display = 'none';
-    el.panel.appendChild(el.updateBtn);
+    el.rightCol.appendChild(el.updateBtn);
+    el.rightCol.appendChild($('button', { class: 'rpg-btn', html: 'DEX', title: 'View all discoverable pets', onclick: openDex }));
+    el.rightCol.appendChild($('div', { class: 'rpg-version', html: 'v' + LOCAL_VERSION, title: 'Installed version' }));
+    el.panel.appendChild(el.rightCol);
     root.appendChild(el.panel);
     el.resetBtn = $('button', { class: 'rpg-reset-btn', html: DEV_MODE ? 'DEV \u00B7 Reset' : 'Reset', onclick: () => { if (!confirm('Reset ALL APM RPG data?')) return; Object.values(K).forEach(deleteRaw); location.reload(); } });
     root.appendChild(el.resetBtn);
