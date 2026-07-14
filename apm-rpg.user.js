@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.5.8
+// @version      0.5.9
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -473,11 +473,11 @@
     '.rpg-bar>div{height:100%;background:linear-gradient(90deg,#4ade80,#22d3ee);transition:width 240ms ease}',
     '.rpg-xp-text{font-size:10px;color:#9aa;margin-top:2px}',
     '.rpg-btn{padding:4px 8px;font-size:10px;font-weight:700;border:1px solid #555;border-radius:5px;background:#2a2a36;color:#ffd166;cursor:pointer}.rpg-btn:hover{background:#3b3b48}',
-    '.rpg-right-col{display:flex;flex-direction:column;gap:4px;align-items:stretch;min-width:52px}',
-    '.rpg-version{font-size:9px;color:#666;text-align:center;letter-spacing:0.5px;font-weight:600;user-select:text}',
+    '.rpg-right-col{display:flex;flex-direction:column;justify-content:space-between;align-items:stretch;min-width:52px;align-self:stretch;gap:6px}',
+    '.rpg-version{font-size:9px;color:#666;text-align:center;letter-spacing:0.5px;font-weight:600;user-select:text;margin-top:auto}',
     '.rpg-reset-btn{position:fixed;left:12px;bottom:12px;z-index:2147483000;font-size:9px;padding:3px 7px;background:rgba(40,0,0,0.8);color:#f77;border:1px solid #633;border-radius:4px;cursor:pointer;opacity:0.5}.rpg-reset-btn:hover{opacity:1;background:#400}',
-    '.rpg-update-btn{background:linear-gradient(135deg,#22c55e,#15803d)!important;color:#fff!important;border-color:#16a34a!important;animation:rpgUpdatePulse 2s ease-in-out infinite}.rpg-update-btn:hover{filter:brightness(1.15)}',
-    '@keyframes rpgUpdatePulse{0%,100%{box-shadow:0 0 0 rgba(34,197,94,0)}50%{box-shadow:0 0 10px rgba(34,197,94,0.7)}}',
+    '.rpg-update-toast{position:fixed;right:16px;bottom:120px;z-index:2147483001;padding:8px 16px;font-size:12px;font-weight:800;letter-spacing:0.6px;border-radius:8px;cursor:pointer;background:linear-gradient(135deg,#22c55e,#15803d);color:#fff;border:1px solid #16a34a;box-shadow:0 4px 14px rgba(34,197,94,0.4);animation:rpgUpdatePulse 2s ease-in-out infinite;transition:transform 0.15s ease}.rpg-update-toast:hover{filter:brightness(1.15);transform:translateY(-1px)}.rpg-update-toast:active{transform:translateY(0)}',
+    '@keyframes rpgUpdatePulse{0%,100%{box-shadow:0 4px 14px rgba(34,197,94,0.4)}50%{box-shadow:0 4px 18px rgba(34,197,94,0.75),0 0 0 6px rgba(34,197,94,0.15)}}',
     '.rpg-menu{position:fixed;right:16px;bottom:110px;z-index:2147483001;background:rgba(20,20,28,0.97);border:1px solid #3b3b48;border-radius:12px;padding:12px;color:#eee;max-width:380px;max-height:60vh;overflow-y:auto;box-shadow:0 10px 30px rgba(0,0,0,0.6)}',
     '.rpg-menu h4{margin:0 0 8px;font-size:12px;color:#ffd166}',
     '.rpg-menu-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}',
@@ -628,17 +628,18 @@
     el.stats.append(el.name, el.level, el.bar, el.xpTxt);
     el.panel.appendChild(el.stats);
     el.rightCol = $('div', { class: 'rpg-right-col' });
-    el.updateBtn = $('button', {
-      class: 'rpg-btn rpg-update-btn',
-      title: 'A new version is available. Click to install.',
-      onclick: () => { if (UPDATE_DOWNLOAD_URL && UPDATE_DOWNLOAD_URL.indexOf('REPLACE_ME') === -1) window.open(UPDATE_DOWNLOAD_URL, '_blank'); }
-    });
-    el.updateBtn.style.display = 'none';
-    el.rightCol.appendChild(el.updateBtn);
     el.rightCol.appendChild($('button', { class: 'rpg-btn', html: 'DEX', title: 'View all discoverable pets', onclick: openDex }));
     el.rightCol.appendChild($('div', { class: 'rpg-version', html: 'v' + LOCAL_VERSION, title: 'Installed version' }));
     el.panel.appendChild(el.rightCol);
     root.appendChild(el.panel);
+    // Floating update toast — appears above the panel when a newer version is on GitHub.
+    el.updateBtn = $('button', {
+      class: 'rpg-update-toast',
+      title: 'A new version is available. Click to install.',
+      onclick: () => { if (UPDATE_DOWNLOAD_URL && UPDATE_DOWNLOAD_URL.indexOf('REPLACE_ME') === -1) window.open(UPDATE_DOWNLOAD_URL, '_blank'); }
+    });
+    el.updateBtn.style.display = 'none';
+    root.appendChild(el.updateBtn);
     el.resetBtn = $('button', { class: 'rpg-reset-btn', html: DEV_MODE ? 'DEV \u00B7 Reset' : 'Reset', onclick: () => { if (!confirm('Reset ALL APM RPG data?')) return; Object.values(K).forEach(deleteRaw); location.reload(); } });
     root.appendChild(el.resetBtn);
   };
@@ -705,6 +706,12 @@
       if (updateInfo.available && updateInfo.latest) {
         el.updateBtn.innerHTML = 'UPDATE \u2192 v' + updateInfo.latest;
         el.updateBtn.style.display = '';
+        // Position just above the panel (recalc on every render so it tracks size)
+        requestAnimationFrame(() => {
+          if (!el.panel || !el.updateBtn) return;
+          const r = el.panel.getBoundingClientRect();
+          el.updateBtn.style.bottom = Math.max(16, window.innerHeight - r.top + 8) + 'px';
+        });
       } else {
         el.updateBtn.style.display = 'none';
       }
@@ -1234,7 +1241,18 @@
     reset: () => { Object.values(K).forEach(deleteRaw); location.reload(); },
     devMode: DEV_MODE,
     checkUpdate: () => checkForUpdate(true),
-    updateInfo: () => ({ local: LOCAL_VERSION, latest: updateInfo.latest, available: updateInfo.available, checkedAt: new Date(updateInfo.checkedAt).toISOString(), url: UPDATE_DOWNLOAD_URL }),
+    updateInfo: () => ({ local: LOCAL_VERSION, latest: updateInfo.latest, available: updateInfo.available, checkedAt: updateInfo.checkedAt ? new Date(updateInfo.checkedAt).toISOString() : 'never', url: UPDATE_DOWNLOAD_URL }),
+    debugUpdate: () => ({
+      local: LOCAL_VERSION,
+      updateInfo: { latest: updateInfo.latest, available: updateInfo.available, checkedAt: updateInfo.checkedAt ? new Date(updateInfo.checkedAt).toISOString() : 'never' },
+      url: UPDATE_META_URL,
+      hasGmXhr: typeof GM_xmlhttpRequest !== 'undefined',
+      grants: (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.grant) || [],
+      buttonExists: !!(el && el.updateBtn),
+      buttonVisible: !!(el && el.updateBtn && el.updateBtn.style.display !== 'none'),
+      cacheIntervalMs: UPDATE_CHECK_INTERVAL_MS
+    }),
+    clearUpdateCache: () => { updateInfo.checkedAt = 0; updateInfo.latest = null; updateInfo.available = false; saveUpdateCache(); return 'cleared'; },
   };
   // Sandbox-context handle (works from Tampermonkey's isolated context).
   window.APM_RPG = APM_RPG_API;
@@ -1242,9 +1260,9 @@
   // Page-context bridge: Chrome's isolated worlds silently block cross-context
   // property writes via unsafeWindow, so instead we inject a proxy into the page
   // and communicate via postMessage. Methods become async on the page side.
-  const APM_RPG_METHODS = ['grantXP','setLevel','spawn','spawnVariant','rollSpawn','despawn','detect','setUsername','reset','checkUpdate','updateInfo'];
+  const APM_RPG_METHODS = ['grantXP','setLevel','spawn','spawnVariant','rollSpawn','despawn','detect','setUsername','reset','checkUpdate','updateInfo','debugUpdate','clearUpdateCache'];
 
-  window.addEventListener('message', (e) => {
+  window.addEventListener('message', async (e) => {
     if (e.source !== window || !e.data || e.data.__apm_rpg !== 'call') return;
     const req = e.data;
     let result, error;
@@ -1256,6 +1274,10 @@
         result = APM_RPG_API.state;
       } else {
         result = target;
+      }
+      // If the sandbox returned a Promise, await it so the page gets the resolved value
+      if (result && typeof result.then === 'function') {
+        result = await result;
       }
       try { result = JSON.parse(JSON.stringify(result === undefined ? null : result)); }
       catch (err) { result = String(result); }
