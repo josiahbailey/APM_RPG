@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.5.7
+// @version      0.5.8
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -191,7 +191,7 @@
   migrateStorage();
 
   const state = {
-    player: load(K.player, { level:1, xp:0, username:null, characterId:(CHARACTERS[0]&&CHARACTERS[0].id) }),
+    player: load(K.player, { level:1, xp:0, username:null, characterId:(CHARACTERS[0]&&CHARACTERS[0].id), hideRoamers:false }),
     collection: load(K.collection, []),
     equip: load(K.equip, { characterId:(CHARACTERS[0]&&CHARACTERS[0].id), petInstanceIds:[null,null,null], bannerId:'bn_none' }),
   };
@@ -460,6 +460,8 @@
     '.rpg-root,.rpg-root *{box-sizing:border-box;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}',
     '.rpg-panel{position:fixed;right:16px;bottom:16px;z-index:2147483000;background:rgba(20,20,28,0.72);color:#eee;border:1px solid #3b3b48;border-radius:12px;padding:10px;display:flex;gap:10px;align-items:center;box-shadow:0 8px 24px rgba(0,0,0,0.5);backdrop-filter:blur(6px);user-select:none}',
     '.rpg-slot-container{display:flex;align-items:center;flex-shrink:0}',
+    '.rpg-left-col{display:flex;flex-direction:column;gap:4px;align-items:stretch}',
+    '.rpg-hide-btn{padding:2px 6px;font-size:9px;font-weight:700;border:1px solid #444;border-radius:4px;background:#22222c;color:#999;cursor:pointer;letter-spacing:0.3px;text-transform:uppercase}.rpg-hide-btn:hover{background:#2f2f3b;color:#ddd;border-color:#555}',
     '.rpg-slot{width:'+PORTRAIT_PX+'px;height:'+PORTRAIT_PX+'px;border-radius:8px;background:#111;border:2px solid #4b4b5c;overflow:hidden;cursor:pointer;display:flex;align-items:center;justify-content:center;position:relative;flex-shrink:0}',
     '.rpg-slot img{width:100%;height:100%;object-fit:cover;display:block}',
     '.rpg-slot.pet{width:'+PET_ICON_PX+'px;height:'+PET_ICON_PX+'px}',
@@ -600,8 +602,22 @@
 
   const buildPanel = () => {
     el.panel = $('div', { class: 'rpg-panel' });
+    el.leftCol = $('div', { class: 'rpg-left-col' });
     el.leftSlot = $('div', { class: 'rpg-slot-container' });
-    el.panel.appendChild(el.leftSlot);
+    el.leftCol.appendChild(el.leftSlot);
+    el.hidePetsBtn = $('button', {
+      class: 'rpg-hide-btn',
+      title: 'Toggle roaming pets on/off (saved)',
+      onclick: () => {
+        state.player.hideRoamers = !state.player.hideRoamers;
+        persistPlayer();
+        renderPanel();
+        if (state.player.hideRoamers) removeAllRoamers();
+        else respawnAllRoamers();
+      }
+    });
+    el.leftCol.appendChild(el.hidePetsBtn);
+    el.panel.appendChild(el.leftCol);
     el.charSlot = $('div', { class: 'rpg-slot', title: 'Click to change avatar', onclick: () => openMenu('character') });
     el.panel.appendChild(el.charSlot);
     el.stats = $('div', { class: 'rpg-stats' });
@@ -684,6 +700,7 @@
     const need = xpToNextLevel(state.player.level);
     el.bar.firstChild.style.width = clamp((state.player.xp / need) * 100, 0, 100) + '%';
     el.xpTxt.textContent = 'EXP ' + state.player.xp + ' / ' + need;
+    if (el.hidePetsBtn) el.hidePetsBtn.textContent = state.player.hideRoamers ? 'Show Pets' : 'Hide Pets';
     if (el.updateBtn) {
       if (updateInfo.available && updateInfo.latest) {
         el.updateBtn.innerHTML = 'UPDATE \u2192 v' + updateInfo.latest;
@@ -1038,6 +1055,7 @@
   };
   const spawnRoamerAt = (i) => {
     removeRoamerAt(i);
+    if (state.player.hideRoamers) return;
     if (i >= unlockedSlotCount()) return;
     const iid = state.equip.petInstanceIds[i];
     const inst = instanceById(iid);
