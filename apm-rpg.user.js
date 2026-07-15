@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.7.19
+// @version      0.7.20
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -676,7 +676,7 @@
   // ================================================================
   GM_addStyle([
     '.rpg-root,.rpg-root *{box-sizing:border-box;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}',
-    '.rpg-panel{position:fixed;right:16px;bottom:16px;z-index:2147483000;background:rgba(20,20,28,0.92);color:#eee;border:1px solid #3b3b48;border-radius:12px;padding:10px;display:flex;gap:10px;align-items:center;box-shadow:0 8px 24px rgba(0,0,0,0.5);backdrop-filter:blur(3px);user-select:none}',
+    '.rpg-panel{position:fixed;right:16px;bottom:16px;z-index:2147483000;background:rgba(20,20,28,0.55);color:#eee;border:1px solid #3b3b48;border-radius:12px;padding:10px;display:flex;gap:10px;align-items:center;box-shadow:0 8px 24px rgba(0,0,0,0.5);backdrop-filter:blur(2px);user-select:none}',
     '.rpg-slot-container{display:flex;align-items:center;flex-shrink:0}',
     '.rpg-left-col{display:flex;flex-direction:column;gap:4px;align-items:stretch}',
     '.rpg-hide-btn{padding:2px 6px;font-size:9px;font-weight:700;border:1px solid #444;border-radius:4px;background:#22222c;color:#999;cursor:pointer;letter-spacing:0.3px;text-transform:uppercase}.rpg-hide-btn:hover{background:#2f2f3b;color:#ddd;border-color:#555}',
@@ -751,7 +751,7 @@
     '.rpg-slot.pet .rpg-slot-badge{font-size:9px;letter-spacing:0.2px}',
     '.rpg-slot-locked{background:#151520;border-color:#333;cursor:not-allowed;display:flex;align-items:center;justify-content:center}',
     '.rpg-lock-label{font-size:11px;font-weight:700;color:#666;letter-spacing:0.5px}',
-    '.rpg-panel{background-color:rgba(20,20,28,0.92);background-repeat:no-repeat}',
+    '.rpg-panel{background-color:rgba(20,20,28,0.55);background-repeat:no-repeat}',
     '.rpg-section-label{font-size:10px;font-weight:700;letter-spacing:1.2px;color:#9aa;margin:8px 0 4px}',
     '.rpg-menu-slider{display:flex;gap:8px;overflow-x:auto;padding:2px 0 6px;scrollbar-width:thin}',
     '.rpg-menu-slider::-webkit-scrollbar{height:6px}',
