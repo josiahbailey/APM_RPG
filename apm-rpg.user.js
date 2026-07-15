@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.7.43
+// @version      0.7.45
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -123,7 +123,10 @@
     if (m) { pet.catchBaseRate = m.catchRate; pet.spawnWeight = m.spawnWeight; }
   }
 
-  const XP_REWARDS = { pageChange: 5 };
+  const XP_REWARDS = {
+    pageChange: 5,
+    catch: { Common: 5, Rare: 15, Epic: 50, Legendary: 150, Ancient: 500 },
+  };
 
   const NAV_COOLDOWN_MS       = 2000;
   const PAGE_CHANGE_XP_CHANCE = 0.15;  // 15% chance to award XP on SPA nav
@@ -760,6 +763,8 @@
     '.rpg-wild .catch-hint{text-align:center;color:gold;font-weight:800;font-size:14px;text-shadow:0 1px 2px #000,0 0 6px #000;margin-top:6px;letter-spacing:2px;animation:rpgCatchBounce 900ms ease-in-out infinite alternate}',
     '@keyframes rpgCatchBounce{from{transform:translateY(0);opacity:0.85}to{transform:translateY(-4px);opacity:1}}',
     '.rpg-wild-shake{animation:rpgWildShake 380ms ease-in-out!important}',
+    '.rpg-fail-catch{position:absolute;top:-18px;left:50%;color:#ef4444;font-weight:800;font-size:13px;text-shadow:0 1px 2px #000,0 0 6px #000;letter-spacing:0.5px;white-space:nowrap;pointer-events:none;animation:rpgFailCatch 1400ms ease-out forwards}',
+    '@keyframes rpgFailCatch{0%{opacity:0;transform:translate(-50%,4px)}20%{opacity:1;transform:translate(-50%,-2px)}80%{opacity:1;transform:translate(-50%,-2px)}100%{opacity:0;transform:translate(-50%,-14px)}}',
     '@keyframes rpgWildShake{0%,100%{margin-left:0}20%{margin-left:-14px}40%{margin-left:12px}60%{margin-left:-8px}80%{margin-left:6px}}',
     '.rpg-caught-anim{animation:rpgCaughtPoof 600ms ease-out forwards}',
     '@keyframes rpgCaughtPoof{0%{transform:scale(1);opacity:1}60%{transform:scale(1.4);opacity:0.8}100%{transform:scale(0.05);opacity:0}}',
@@ -1397,36 +1402,6 @@
   const QUADRANT_OUTER_V_MULT = 0.9;   // squash arc vertically -10%
   const QUADRANT_CENTER_Y_OFFSET = 50; // shift arc center down 50px so top doesn't reach as high
 
-  // ---- 2 corner bumpers ----
-  // The roaming region is bounded by the arc (upper-left curve) plus the
-  // bottom + right viewport edges. Its two ground-level corners are where
-  // pets get stuck sliding: bottom-right (viewport corner, under the panel)
-  // and bottom-left (where the arc meets the viewport bottom). We reject
-  // targets within BUMPER_RADIUS of either corner and draw a diagonal wall
-  // there when the debug viz is on.
-  const BUMPER_RADIUS    = 110;    // rejection radius from each corner (px)
-  const BUMPER_VIZ_LEN   = 130;    // visual bumper length (px)
-  const BUMPER_VIZ_THICK = 10;     // visual bumper thickness (px)
-
-  const getBumperCorners = () => {
-    const W = window.innerWidth, H = window.innerHeight;
-    const baseR = Math.max(QUADRANT_INNER_R + 120, Math.min(W, H) * QUADRANT_OUTER_FRAC);
-    const arcW  = baseR * QUADRANT_OUTER_H_MULT;
-    return [
-      // Bottom-right (viewport corner, behind panel). Wall faces upper-left.
-      { x: W,        y: H, rotDeg: -45 },
-      // Bottom-left (arc's westernmost point at viewport bottom). Wall faces upper-right.
-      { x: W - arcW, y: H, rotDeg:  45 },
-    ];
-  };
-
-  const inBumperZone = (px, py) => {
-    for (const c of getBumperCorners()) {
-      if (Math.hypot(px - c.x, py - c.y) < BUMPER_RADIUS) return true;
-    }
-    return false;
-  };
-
   const pickQuadrantPoint = (spriteW, spriteH, curX, curY, minMoveDist) => {
     const W = window.innerWidth, H = window.innerHeight;
     const baseR = Math.max(QUADRANT_INNER_R + 120, Math.min(W, H) * QUADRANT_OUTER_FRAC);
@@ -1438,15 +1413,12 @@
       const cx = W - Math.cos(angle) * radius * QUADRANT_OUTER_H_MULT;
       const cy = (H + QUADRANT_CENTER_Y_OFFSET) - Math.sin(angle) * radius * QUADRANT_OUTER_V_MULT;
       return {
-        angle: angle,
         x: clamp(cx - spriteW / 2, 0, Math.max(0, W - spriteW)),
         y: clamp(cy - spriteH / 2, 0, Math.max(0, H - spriteH)),
       };
     };
     for (let i = 0; i < 16; i++) {
       const t = generate();
-      // Check bumper against the sprite's CENTER, not top-left corner.
-      if (inBumperZone(t.x + spriteW / 2, t.y + spriteH / 2)) continue;
       if (Math.hypot(t.x - curX, t.y - curY) < minMoveDist) continue;
       return t;
     }
@@ -1480,32 +1452,6 @@
     path.setAttribute('opacity', '0.75');
     svg.appendChild(path);
     container.appendChild(svg);
-    // Two flat bumpers at the region's ground-level corners, each rotated
-    // so its face points diagonally inward toward the largest interior space.
-    // We shift the bumper along its face-normal by ~half the rejection radius
-    // so the visual sits inside the rejection circle, not at the exact corner.
-    const OFFSET = BUMPER_RADIUS * 0.45;
-    for (const c of getBumperCorners()) {
-      // rotDeg -45 -> face direction (upper-left) = (-1,-1)/√2
-      // rotDeg  45 -> face direction (upper-right) = (1,-1)/√2
-      const faceRad = (c.rotDeg + 90) * Math.PI / 180;  // face normal is perpendicular to the wall's long axis
-      const bx = c.x + Math.cos(faceRad) * OFFSET;
-      const by = c.y + Math.sin(faceRad) * OFFSET;
-      const b = document.createElement('div');
-      b.style.cssText =
-        'position:absolute;' +
-        'left:' + (bx - BUMPER_VIZ_LEN / 2) + 'px;' +
-        'top:'  + (by - BUMPER_VIZ_THICK / 2) + 'px;' +
-        'width:'  + BUMPER_VIZ_LEN + 'px;' +
-        'height:' + BUMPER_VIZ_THICK + 'px;' +
-        'background:rgba(239,68,68,0.65);' +
-        'border:1px solid #ef4444;' +
-        'border-radius:3px;' +
-        'transform:rotate(' + c.rotDeg + 'deg);' +
-        'transform-origin:center;' +
-        'box-shadow:0 0 10px rgba(239,68,68,0.6)';
-      container.appendChild(b);
-    }
     document.body.appendChild(container);
     boundaryVizEl = container;
   };
@@ -1647,9 +1593,12 @@
       }
       await new Promise(r => setTimeout(r, 600));
       const caughtName = wildPet.name, caughtPetId = wildPet.id, caughtVariant = wildVariant;
+      const caughtRarity = wildPet.rarity;
       despawnWild();
       const inst = { instanceId: genInstanceId(), petId: caughtPetId, variant: caughtVariant, caughtAt: Date.now() };
       state.collection.push(inst); persistCollection();
+      const catchXP = (XP_REWARDS.catch && XP_REWARDS.catch[caughtRarity]) || 0;
+      if (catchXP > 0) grantPlayerXP(catchXP, 'catch ' + caughtRarity + ' ' + caughtName);
       const isFirst = state.collection.filter(i => i.petId === caughtPetId && variantOf(i) === caughtVariant).length === 1;
       const label = variantLabel(caughtVariant).toUpperCase();
       const badge = variantBadge(caughtVariant);
@@ -1667,6 +1616,13 @@
       if (wildEl) {
         wildEl.classList.add('rpg-wild-shake');
         setTimeout(() => { if (wildEl) wildEl.classList.remove('rpg-wild-shake'); }, 400);
+        // On 1st + 2nd failure, float a small "Failed to catch!" over the pet.
+        // 3rd failure already shows a "ran away" modal so we skip it there.
+        if (wildAttempts < 3) {
+          const failText = $('div', { class: 'rpg-fail-catch', html: 'Failed to catch!' });
+          wildEl.appendChild(failText);
+          setTimeout(() => { if (failText && failText.parentNode) failText.remove(); }, 1400);
+        }
       }
       setTimeout(moveWild, 350);
       if (wildAttempts >= 3) {
