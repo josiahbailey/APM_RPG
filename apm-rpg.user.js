@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.6.10
+// @version      0.6.11
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -548,7 +548,9 @@
     '.rpg-slot img{width:100%;height:100%;object-fit:cover;display:block}',
     '.rpg-slot.pet{width:'+PET_ICON_PX+'px;height:'+PET_ICON_PX+'px}',
     '.rpg-slot .rpg-slot-badge{position:absolute;bottom:0;left:0;right:0;font-size:10px;background:rgba(0,0,0,0.7);text-align:center;padding:1px 2px}',
-    '.rpg-stats{min-width:140px;position:relative}',
+    '.rpg-stats{min-width:180px;position:relative;display:flex;flex-direction:column;gap:2px}',
+    '.rpg-stat-row{display:flex;align-items:center;justify-content:space-between;gap:8px}',
+    '.rpg-stat-row .rpg-name,.rpg-stat-row .rpg-xp-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
     '.rpg-xp-gain{position:absolute;right:4px;top:0;font-size:12px;font-weight:800;color:#22c55e;text-shadow:0 1px 3px rgba(0,0,0,0.7),0 0 6px rgba(34,197,94,0.5);pointer-events:none;z-index:5;white-space:nowrap;animation:rpgXpGain 1.2s cubic-bezier(0.22,1,0.36,1) forwards}',
     '@keyframes rpgXpGain{0%{opacity:0;transform:translateY(0) scale(0.5)}15%{opacity:1;transform:translateY(-4px) scale(1.1)}25%{transform:translateY(-6px) scale(1)}100%{opacity:0;transform:translateY(-34px) scale(1)}}',
     '.rpg-bar-pulse{animation:rpgBarPulse 500ms ease-out}',
@@ -559,7 +561,7 @@
     '.rpg-bar>div{height:100%;background:linear-gradient(90deg,#4ade80,#22d3ee);transition:width 240ms ease}',
     '.rpg-xp-text{font-size:10px;color:#9aa;margin-top:2px}',
     '.rpg-btn{padding:4px 8px;font-size:10px;font-weight:700;border:1px solid #555;border-radius:5px;background:#2a2a36;color:#ffd166;cursor:pointer}.rpg-btn:hover{background:#3b3b48}',
-    '.rpg-right-col{display:flex;flex-direction:column;justify-content:space-between;align-items:stretch;min-width:52px;align-self:stretch;gap:6px}',
+    '.rpg-right-col{display:none}',
     '.rpg-version{font-size:9px;color:#666;text-align:center;letter-spacing:0.5px;font-weight:600;user-select:text;margin-top:auto}',
     '.rpg-reset-btn{position:fixed;left:12px;bottom:12px;z-index:2147483000;font-size:9px;padding:3px 7px;background:rgba(40,0,0,0.8);color:#f77;border:1px solid #633;border-radius:4px;cursor:pointer;opacity:0.5}.rpg-reset-btn:hover{opacity:1;background:#400}',
     '.rpg-update-toast{position:fixed;right:16px;bottom:120px;z-index:2147483001;padding:8px 16px;font-size:12px;font-weight:800;letter-spacing:0.6px;border-radius:8px;cursor:pointer;background:linear-gradient(135deg,#22c55e,#15803d);color:#fff;border:1px solid #16a34a;box-shadow:0 4px 14px rgba(34,197,94,0.4);animation:rpgUpdatePulse 2s ease-in-out infinite;transition:transform 0.15s ease}.rpg-update-toast:hover{filter:brightness(1.15);transform:translateY(-1px)}.rpg-update-toast:active{transform:translateY(0)}',
@@ -713,12 +715,22 @@
     el.level = $('div', { class: 'rpg-level' });
     el.bar = $('div', { class: 'rpg-bar' }, [$('div')]);
     el.xpTxt = $('div', { class: 'rpg-xp-text' });
-    el.stats.append(el.name, el.level, el.bar, el.xpTxt);
+    // Name row: username on the left, DEX button pinned to the right (aligned with bar/version end)
+    const nameRow = $('div', { class: 'rpg-stat-row' });
+    nameRow.appendChild(el.name);
+    nameRow.appendChild($('button', {
+      class: 'rpg-btn',
+      type: 'button',
+      html: 'DEX',
+      title: 'View all discoverable pets',
+      onclick: (e) => { if (e && e.preventDefault) e.preventDefault(); openDex(); }
+    }));
+    // XP row: xp text on the left, version pinned to the right (aligned with bar/DEX end)
+    const xpRow = $('div', { class: 'rpg-stat-row' });
+    xpRow.appendChild(el.xpTxt);
+    xpRow.appendChild($('div', { class: 'rpg-version', html: 'v' + LOCAL_VERSION, title: 'Installed version' }));
+    el.stats.append(nameRow, el.level, el.bar, xpRow);
     el.panel.appendChild(el.stats);
-    el.rightCol = $('div', { class: 'rpg-right-col' });
-    el.rightCol.appendChild($('button', { class: 'rpg-btn', html: 'DEX', title: 'View all discoverable pets', onclick: openDex }));
-    el.rightCol.appendChild($('div', { class: 'rpg-version', html: 'v' + LOCAL_VERSION, title: 'Installed version' }));
-    el.panel.appendChild(el.rightCol);
     root.appendChild(el.panel);
     // Floating update toast — appears above the panel when a newer version is on GitHub.
     el.updateBtn = $('button', {
