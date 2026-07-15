@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.7.39
+// @version      0.7.40
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -1396,35 +1396,11 @@
   const QUADRANT_OUTER_H_MULT = 1.2;   // stretch arc horizontally +20%
   const QUADRANT_OUTER_V_MULT = 0.9;   // squash arc vertically -10%
   const QUADRANT_CENTER_Y_OFFSET = 50; // shift arc center down 50px so top doesn't reach as high
-  const PANEL_BUFFER_PX = 18;          // no-go buffer around the RPG UI panel
-
-  // Return the RPG panel's viewport rect expanded by PANEL_BUFFER_PX, or null
-  // if the panel isn't ready yet. Used by pickQuadrantPoint to keep pets from
-  // "landing on" the UI.
-  const getPanelNoGoRect = () => {
-    try {
-      if (!el || !el.panel) return null;
-      const r = el.panel.getBoundingClientRect();
-      if (!r || r.width === 0 || r.height === 0) return null;
-      return {
-        left:   r.left   - PANEL_BUFFER_PX,
-        right:  r.right  + PANEL_BUFFER_PX,
-        top:    r.top    - PANEL_BUFFER_PX,
-        bottom: r.bottom + PANEL_BUFFER_PX,
-      };
-    } catch (e) { return null; }
-  };
 
   const pickQuadrantPoint = (spriteW, spriteH, curX, curY, minMoveDist) => {
     const W = window.innerWidth, H = window.innerHeight;
     const baseR = Math.max(QUADRANT_INNER_R + 120, Math.min(W, H) * QUADRANT_OUTER_FRAC);
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-    const noGo = getPanelNoGoRect();
-    // Sprite-rect vs panel-rect overlap. Sprite lives at (x, y) with size WxH.
-    const overlapsPanel = (x, y) => {
-      if (!noGo) return false;
-      return x < noGo.right && (x + spriteW) > noGo.left && y < noGo.bottom && (y + spriteH) > noGo.top;
-    };
     const generate = () => {
       const angle = Math.random() * (Math.PI / 2);           // 0 = west, π/2 = north
       const radius = QUADRANT_INNER_R + Math.random() * (baseR - QUADRANT_INNER_R);
@@ -1439,19 +1415,9 @@
     for (let i = 0; i < 16; i++) {
       const t = generate();
       if (Math.hypot(t.x - curX, t.y - curY) < minMoveDist) continue;
-      if (overlapsPanel(t.x, t.y)) continue;
       return t;
     }
-    // Fallback: generate once and, if it's inside the panel, deflect it left
-    // (the panel is on the right, so pushing to the panel's left edge is
-    // always inside the viewport as long as spriteW <= panel.left).
-    const t = generate();
-    if (noGo && overlapsPanel(t.x, t.y)) {
-      const deflectedX = noGo.left - spriteW - 2;
-      if (deflectedX >= 0) t.x = deflectedX;
-      else t.y = Math.max(0, noGo.top - spriteH - 2);  // extreme edge case
-    }
-    return t;
+    return generate();
   };
 
 
