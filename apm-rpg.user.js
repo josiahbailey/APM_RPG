@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.7.25
+// @version      0.7.26
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -1335,6 +1335,19 @@
 
   const rpgRawWin = (typeof unsafeWindow !== 'undefined' && unsafeWindow) ? unsafeWindow : window;
 
+  // Rolling debug log: every URL that flows through our XHR/fetch hooks.
+  // Inspect with APM_RPG.debugDetection() from the devtools console.
+  const RPG_URL_LOG_MAX = 60;
+  const rpgUrlLog = [];       // [{ src, url, matched, ts }]
+  let rpgVerbose = false;
+  const rpgLogUrl = (src, url, matched) => {
+    try {
+      rpgUrlLog.push({ src: src, url: url, matched: matched, ts: Date.now() });
+      if (rpgUrlLog.length > RPG_URL_LOG_MAX) rpgUrlLog.shift();
+      if (rpgVerbose) console.log('[APM RPG url]', src, matched || '(no match)', url);
+    } catch (e) {}
+  };
+
   const handleNavActivity = (source) => {
     if (!canFire('nav', NAV_COOLDOWN_MS)) return;
     console.log('[APM RPG] nav activity via', source);
@@ -1354,12 +1367,18 @@
     grantPlayerXP(XP_REWARDS.ptpCreated, 'PTP created');
     handleNavActivity('ptp-created');
   };
-  const classifyUrl = (url) => {
+  const classifyUrl = (url, from) => {
     if (!url) return;
-    if (PTP_START_URL_RE.test(url))    { handlePTPCreated('xhr-url', url); return; }
-    if (EAM_HEARTBEAT_RE.test(url))    return;               // ignore keepalives
-    if (PTP_COMPLETE_URL_RE.test(url)) { handleNavActivity('ptp-submit'); return; }
-    if (EAM_API_URL_RE.test(url))      { handleNavActivity('eam-api'); return; }
+    let matched = null;
+    if (PTP_START_URL_RE.test(url))         matched = 'PTP_START';
+    else if (EAM_HEARTBEAT_RE.test(url))    matched = 'HEARTBEAT (ignored)';
+    else if (PTP_COMPLETE_URL_RE.test(url)) matched = 'PTP_COMPLETE';
+    else if (EAM_API_URL_RE.test(url))      matched = 'EAM_API';
+    rpgLogUrl(from || 'unknown', url, matched);
+    if (matched === 'PTP_START')    { handlePTPCreated('xhr-url', url); return; }
+    if (matched === 'HEARTBEAT (ignored)') return;
+    if (matched === 'PTP_COMPLETE') { handleNavActivity('ptp-submit'); return; }
+    if (matched === 'EAM_API')      { handleNavActivity('eam-api'); return; }
   };
 
   // ---- XHR hook ----
@@ -1381,7 +1400,7 @@
             if (this.status >= 200 && this.status < 300) handleWorkOrderComplete('xhr-body');
           }, { once: true });
         }
-        this.addEventListener('load', () => classifyUrl(url), { once: true });
+        this.addEventListener('load', () => classifyUrl(url, 'xhr'), { once: true });
         return origSend.apply(this, arguments);
       };
       proto.__apmRpgHooked = true;
@@ -1401,12 +1420,12 @@
           // Confirm on successful response
           return origFetch.apply(this, arguments).then((resp) => {
             if (resp && resp.ok) handleWorkOrderComplete('fetch-body');
-            classifyUrl(url);
+            classifyUrl(url, 'fetch');
             return resp;
           }, (err) => { throw err; });
         }
         return origFetch.apply(this, arguments).then((resp) => {
-          if (resp && resp.ok !== false) classifyUrl(url);
+          if (resp && resp.ok !== false) classifyUrl(url, 'fetch');
           return resp;
         }, (err) => { throw err; });
       };
@@ -1830,6 +1849,59 @@
       cacheIntervalMs: UPDATE_CHECK_INTERVAL_MS
     }),
     clearUpdateCache: () => { updateInfo.checkedAt = 0; updateInfo.latest = null; updateInfo.available = false; saveUpdateCache(); return 'cleared'; },
+
+    // Detection debug helpers
+    debugDetection: () => {
+      const rawXHRProto = rpgRawWin.XMLHttpRequest && rpgRawWin.XMLHttpRequest.prototype;
+      return {
+        version: LOCAL_VERSION,
+        frame: {
+          isTop: (function(){ try { return window === window.top; } catch (e) { return null; } })(),
+          hostname: (function(){ try { return location.hostname; } catch (e) { return null; } })(),
+          href: (function(){ try { return location.href; } catch (e) { return null; } })(),
+          hasUnsafeWindow: typeof unsafeWindow !== 'undefined',
+          rawWinSameAsWindow: rpgRawWin === window,
+        },
+        hooks: {
+          xhrHooked: !!(rawXHRProto && rawXHRProto.__apmRpgHooked),
+          fetchHooked: !!rpgRawWin.__apmRpgFetchHooked,
+          historyHooked: !!rpgRawWin.__apmRpgHistoryHooked,
+        },
+        cooldowns: {
+          complete: cooldown.complete ? new Date(cooldown.complete).toISOString() : 'never',
+          ptp: cooldown.ptp ? new Date(cooldown.ptp).toISOString() : 'never',
+          nav: cooldown.nav ? new Date(cooldown.nav).toISOString() : 'never',
+        },
+        patterns: {
+          PTP_START: PTP_START_URL_RE.source,
+          PTP_COMPLETE: PTP_COMPLETE_URL_RE.source,
+          EAM_API: EAM_API_URL_RE.source,
+          EAM_HEARTBEAT: EAM_HEARTBEAT_RE.source,
+          WOCOMPLETE_BODY: WOCOMPLETE_BODY_RE.source,
+        },
+        recentUrls: rpgUrlLog.slice().reverse(),
+        recentUrlCount: rpgUrlLog.length,
+        verbose: rpgVerbose,
+      };
+    },
+    setVerbose: (on) => { rpgVerbose = on !== false; return 'verbose ' + (rpgVerbose ? 'ON — every URL will log' : 'OFF'); },
+    testUrl: (url) => {
+      const before = { ptp: cooldown.ptp, nav: cooldown.nav };
+      const results = {
+        matches: {
+          PTP_START: PTP_START_URL_RE.test(url),
+          PTP_COMPLETE: PTP_COMPLETE_URL_RE.test(url),
+          EAM_API: EAM_API_URL_RE.test(url),
+          EAM_HEARTBEAT: EAM_HEARTBEAT_RE.test(url),
+          WOCOMPLETE_BODY: WOCOMPLETE_BODY_RE.test(url),
+        }
+      };
+      classifyUrl(url, 'testUrl');
+      results.firedPTP = cooldown.ptp !== before.ptp;
+      results.firedNav = cooldown.nav !== before.nav;
+      return results;
+    },
+    forceHook: () => { installXHRHook(); installFetchHook(); installHistoryHook(); return 'reinstalled'; },
   };
   // Sandbox-context handle (works from Tampermonkey's isolated context).
   window.APM_RPG = APM_RPG_API;
@@ -1837,7 +1909,7 @@
   // Page-context bridge: Chrome's isolated worlds silently block cross-context
   // property writes via unsafeWindow, so instead we inject a proxy into the page
   // and communicate via postMessage. Methods become async on the page side.
-  const APM_RPG_METHODS = ['grantXP','setLevel','spawn','spawnVariant','rollSpawn','despawn','detect','setUsername','reset','checkUpdate','updateInfo','debugUpdate','clearUpdateCache'];
+  const APM_RPG_METHODS = ['grantXP','setLevel','spawn','spawnVariant','rollSpawn','despawn','detect','setUsername','reset','checkUpdate','updateInfo','debugUpdate','clearUpdateCache','debugDetection','setVerbose','testUrl','forceHook'];
 
   window.addEventListener('message', async (e) => {
     if (e.source !== window || !e.data || e.data.__apm_rpg !== 'call') return;
