@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.7.29
+// @version      0.7.30
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -779,7 +779,9 @@
     '.rpg-slot.pet .rpg-slot-badge{font-size:9px;letter-spacing:0.2px}',
     '.rpg-slot-locked{background:#151520;border-color:#333;cursor:not-allowed;display:flex;align-items:center;justify-content:center}',
     '.rpg-lock-label{font-size:11px;font-weight:700;color:#666;letter-spacing:0.5px}',
-    '.rpg-panel{background-color:rgba(20,20,28,0.45);background-repeat:no-repeat}',
+    '.rpg-panel{background-color:rgba(20,20,28,0.45);background-repeat:no-repeat;overflow:hidden}',
+    '.rpg-panel::before{content:"";position:absolute;inset:0;background-image:var(--rpg-banner-img,none);background-size:cover;background-position:center;background-repeat:no-repeat;opacity:0.35;pointer-events:none;border-radius:inherit;z-index:0}',
+    '.rpg-panel > *{position:relative;z-index:1}',
     '.rpg-section-label{font-size:10px;font-weight:700;letter-spacing:1.2px;color:#9aa;margin:8px 0 4px}',
     '.rpg-menu-slider{display:flex;gap:8px;overflow-x:auto;padding:2px 0 6px;scrollbar-width:thin}',
     '.rpg-menu-slider::-webkit-scrollbar{height:6px}',
@@ -963,14 +965,16 @@
   const applyBanner = () => {
     if (!el.panel) return;
     const b = bannerById(state.equip.bannerId);
+    // Banner image goes on ::before at reduced opacity so the panel's transparent
+    // rgba background still lets the page show through — matches the default
+    // no-banner look regardless of whether the image is opaque.
     if (b && b.img) {
-      el.panel.style.backgroundImage =
-        'linear-gradient(rgba(20,20,28,0.45), rgba(20,20,28,0.5)), url("' + b.img + '")';
-      el.panel.style.backgroundSize = 'cover';
-      el.panel.style.backgroundPosition = 'center';
+      el.panel.style.setProperty('--rpg-banner-img', 'url("' + b.img + '")');
     } else {
-      el.panel.style.backgroundImage = '';
+      el.panel.style.removeProperty('--rpg-banner-img');
     }
+    // Clear any legacy inline backgroundImage from prior versions.
+    el.panel.style.backgroundImage = '';
   };
   const renderPanel = () => {
     if (!el.panel) return;
