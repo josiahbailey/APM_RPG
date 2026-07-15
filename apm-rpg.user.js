@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.7.24
+// @version      0.7.25
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -123,7 +123,23 @@
     if (m) { pet.catchBaseRate = m.catchRate; pet.spawnWeight = m.spawnWeight; }
   }
 
-  const XP_REWARDS = { completeWorkOrder: 10, pageChange: 5 };
+  const XP_REWARDS = { completeWorkOrder: 10, pageChange: 5, ptpCreated: 10 };
+
+  // ---- Action-detection URL patterns (mirrored from APM Master install.user.js)
+  // PTP starts: submit_assessment=complete/cancel; create_* = start.
+  const PTP_START_URL_RE     = /\/(?:create_assessment|create_troubleshooting|convert_iptp_assess)/i;
+  const PTP_COMPLETE_URL_RE  = /\/submit_assessment/i;
+  // EAM SPA API endpoints match /web/base/<SCREEN>.xmlhttp. Heartbeat/keepalive
+  // endpoints are noisy and excluded.
+  const EAM_API_URL_RE       = /\/web\/base\/[A-Za-z0-9_]+\.xmlhttp/i;
+  const EAM_HEARTBEAT_RE     = /\/web\/base\/(?:SESSION|BSFOOTR|KEEPALIVE|BSTIMR)\.xmlhttp/i;
+  // Request-body sniff: EAM sends workorderstatus=C for "Complete" (single C).
+  const WOCOMPLETE_BODY_RE   = /(?:^|[?&;])workorderstatus=C(?![A-Z])/i;
+  // Buttons that plausibly commit a WO save operation.
+  const SAVE_BTN_TEXT_RE     = /^(?:save|ok|apply|submit|complete|save & close|save and close)$/i;
+  const NAV_COOLDOWN_MS      = 2000;
+  const PTP_XP_COOLDOWN_MS   = 30000;
+  const COMPLETE_COOLDOWN_MS = 4000;
   const PAGE_CHANGE_XP_CHANCE = 0.15;  // 15% chance to award XP on SPA nav
 
 
@@ -1296,19 +1312,173 @@
   };
 
   // ================================================================
-  // ACTION DETECTION
+  // ACTION DETECTION 2.0 — XHR/fetch/history hooks + click heuristics
+  //
+  // EAM is a SPA layered over Ext JS iframes; hashchange/popstate cover almost
+  // nothing.  APM Master's approach (install.user.js ~line 33217) is to
+  // intercept XHR/fetch and classify URLs, which we mirror here.  We hook the
+  // PAGE's XMLHttpRequest / fetch via unsafeWindow — hooking the sandboxed
+  // Tampermonkey copy would miss every real call.
+  //
+  // Signals we surface:
+  //   * EAM_API_URL_RE hits              -> nav activity  (wild spawn + 15% XP)
+  //   * PTP_START_URL_RE hits            -> +10 XP        (30s cooldown)
+  //   * WOCOMPLETE_BODY_RE in XHR body   -> +10 XP        (4s cooldown)
+  //   * click on Save/OK/Submit etc.     -> +10 XP IF status field reads Complete
+  //   * history.pushState/replaceState   -> nav activity
+  //
+  // Every path console.log's what fired so you can see it in devtools.
   // ================================================================
-  const cooldown = { complete: 0 };
-  const canFire = (k, ms) => { ms = ms || 1500; const now = Date.now(); if (now - cooldown[k] < ms) return false; cooldown[k] = now; return true; };
+  const cooldown = { complete: 0, ptp: 0, nav: 0 };
+  const canFire = (k, ms) => { const now = Date.now(); if (now - cooldown[k] < ms) return false; cooldown[k] = now; return true; };
   const textOf = (n) => ((n && (n.textContent || n.value || (n.getAttribute && n.getAttribute('aria-label')))) || '').trim().toLowerCase();
 
+  const rpgRawWin = (typeof unsafeWindow !== 'undefined' && unsafeWindow) ? unsafeWindow : window;
+
+  const handleNavActivity = (source) => {
+    if (!canFire('nav', NAV_COOLDOWN_MS)) return;
+    console.log('[APM RPG] nav activity via', source);
+    setTimeout(rollWildSpawn, 500);
+    if (Math.random() < PAGE_CHANGE_XP_CHANCE) {
+      grantPlayerXP(XP_REWARDS.pageChange, 'page change');
+    }
+  };
+  const handleWorkOrderComplete = (source) => {
+    if (!canFire('complete', COMPLETE_COOLDOWN_MS)) return;
+    console.log('[APM RPG] WO complete via', source);
+    grantPlayerXP(XP_REWARDS.completeWorkOrder, 'complete WO (' + source + ')');
+  };
+  const handlePTPCreated = (source, wo) => {
+    if (!canFire('ptp', PTP_XP_COOLDOWN_MS)) return;
+    console.log('[APM RPG] PTP created via', source, wo || '');
+    grantPlayerXP(XP_REWARDS.ptpCreated, 'PTP created');
+    handleNavActivity('ptp-created');
+  };
+  const classifyUrl = (url) => {
+    if (!url) return;
+    if (PTP_START_URL_RE.test(url))    { handlePTPCreated('xhr-url', url); return; }
+    if (EAM_HEARTBEAT_RE.test(url))    return;               // ignore keepalives
+    if (PTP_COMPLETE_URL_RE.test(url)) { handleNavActivity('ptp-submit'); return; }
+    if (EAM_API_URL_RE.test(url))      { handleNavActivity('eam-api'); return; }
+  };
+
+  // ---- XHR hook ----
+  const installXHRHook = () => {
+    try {
+      const proto = rpgRawWin.XMLHttpRequest && rpgRawWin.XMLHttpRequest.prototype;
+      if (!proto || proto.__apmRpgHooked) return;
+      const origOpen = proto.open;
+      const origSend = proto.send;
+      proto.open = function(method, url) {
+        try { this.__apmRpgUrl = String(url || ''); } catch (e) {}
+        return origOpen.apply(this, arguments);
+      };
+      proto.send = function(body) {
+        const url = this.__apmRpgUrl || '';
+        // Body-based WO complete detection — fires only after 2xx response.
+        if (typeof body === 'string' && WOCOMPLETE_BODY_RE.test(body)) {
+          this.addEventListener('load', function () {
+            if (this.status >= 200 && this.status < 300) handleWorkOrderComplete('xhr-body');
+          }, { once: true });
+        }
+        this.addEventListener('load', () => classifyUrl(url), { once: true });
+        return origSend.apply(this, arguments);
+      };
+      proto.__apmRpgHooked = true;
+      console.log('[APM RPG] XHR hook installed');
+    } catch (e) { console.warn('[APM RPG] XHR hook failed:', e && e.message); }
+  };
+
+  // ---- fetch hook ----
+  const installFetchHook = () => {
+    try {
+      if (rpgRawWin.__apmRpgFetchHooked) return;
+      const origFetch = rpgRawWin.fetch;
+      if (typeof origFetch !== 'function') return;
+      rpgRawWin.fetch = function(input, init) {
+        const url = (typeof input === 'string') ? input : (input && input.url) || '';
+        if (init && typeof init.body === 'string' && WOCOMPLETE_BODY_RE.test(init.body)) {
+          // Confirm on successful response
+          return origFetch.apply(this, arguments).then((resp) => {
+            if (resp && resp.ok) handleWorkOrderComplete('fetch-body');
+            classifyUrl(url);
+            return resp;
+          }, (err) => { throw err; });
+        }
+        return origFetch.apply(this, arguments).then((resp) => {
+          if (resp && resp.ok !== false) classifyUrl(url);
+          return resp;
+        }, (err) => { throw err; });
+      };
+      rpgRawWin.__apmRpgFetchHooked = true;
+      console.log('[APM RPG] fetch hook installed');
+    } catch (e) { console.warn('[APM RPG] fetch hook failed:', e && e.message); }
+  };
+
+  // ---- history.pushState / replaceState hook ----
+  const installHistoryHook = () => {
+    try {
+      if (rpgRawWin.__apmRpgHistoryHooked) return;
+      const hist = rpgRawWin.history;
+      if (!hist) return;
+      for (const m of ['pushState', 'replaceState']) {
+        const orig = hist[m];
+        if (typeof orig !== 'function') continue;
+        hist[m] = function() {
+          const r = orig.apply(this, arguments);
+          handleNavActivity('history.' + m);
+          return r;
+        };
+      }
+      rpgRawWin.__apmRpgHistoryHooked = true;
+      console.log('[APM RPG] history hook installed');
+    } catch (e) { console.warn('[APM RPG] history hook failed:', e && e.message); }
+  };
+
+  // ---- WO status heuristic (for click detection) ----
+  const isWOStatusComplete = () => {
+    try {
+      const nodes = document.querySelectorAll(
+        'input[name*="workorderstatus" i], input[data-fieldname*="workorderstatus" i], ' +
+        'input[id*="workorderstatus" i], select[name*="workorderstatus" i], ' +
+        'input[name*="status" i][role="combobox"]'
+      );
+      for (const n of nodes) {
+        const v = (n.value || '').toLowerCase();
+        if (v === 'c' || v.includes('complete')) return true;
+      }
+    } catch (e) {}
+    return false;
+  };
+
+  // ---- click detector (broader than v1) ----
   document.addEventListener('click', (e) => {
     let n = e.target;
-    for (let i = 0; i < 6 && n && n !== document.body; i++, n = n.parentElement) {
+    for (let i = 0; i < 8 && n && n !== document.body; i++, n = n.parentElement) {
       const t = textOf(n); if (!t) continue;
-      if (/\bcomplete\b/.test(t) && !/incomplete/.test(t) && canFire('complete')) { grantPlayerXP(XP_REWARDS.completeWorkOrder, 'complete WO'); return; }
+      // Direct 'complete' text (button-labelled Complete) — still count it.
+      if (/\bcomplete\b/.test(t) && !/incomplete/.test(t)) {
+        handleWorkOrderComplete('click-text');
+        return;
+      }
+      // Save/OK/etc. button — only counts when the form's status reads Complete.
+      if (SAVE_BTN_TEXT_RE.test(t) && isWOStatusComplete()) {
+        handleWorkOrderComplete('click-save+status');
+        return;
+      }
     }
   }, true);
+
+  // ---- history-fallback (still useful for the rare real hash change) ----
+  window.addEventListener('hashchange', () => handleNavActivity('hashchange'));
+  window.addEventListener('popstate',   () => handleNavActivity('popstate'));
+
+  const setupActionDetection = () => {
+    installXHRHook();
+    installFetchHook();
+    installHistoryHook();
+    console.log('[APM RPG] action detection wired');
+  };
 
   // ================================================================
   // MOVEMENT HELPER — quarter-circle boundary around the bottom-right UI.
@@ -1543,14 +1713,6 @@
   }
 
   const rollWildSpawn = () => { if (!wildEl && Math.random() < WILD_SPAWN_CHANCE) spawnWild(); };
-  const onPageChange = () => {
-    setTimeout(rollWildSpawn, 500);
-    if (Math.random() < PAGE_CHANGE_XP_CHANCE) {
-      grantPlayerXP(XP_REWARDS.pageChange, 'page change');
-    }
-  };
-  window.addEventListener('hashchange', onPageChange);
-  window.addEventListener('popstate', onPageChange);
 
   // ================================================================
   // BOOT
@@ -1613,6 +1775,7 @@
 
   console.log('[APM RPG] v' + LOCAL_VERSION + ' loaded');
     setupMultiTabSync();
+    setupActionDetection();
     bumpInstalledVersion();
     loadUpdateCache();
     buildPanel(); renderPanel();
