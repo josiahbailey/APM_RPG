@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.6.6
+// @version      0.6.7
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -831,6 +831,12 @@
 
     if (kind === 'character') {
       menuEl.appendChild($('h4', { html: 'CUSTOMIZE' }));
+      menuEl.appendChild($('button', {
+        class: 'rpg-modal-close',
+        html: '\u00D7',
+        title: 'Close',
+        onclick: (e) => { e.stopPropagation(); closeMenu(); }
+      }));
 
       // Banner slider
       menuEl.appendChild($('div', { class: 'rpg-section-label', html: 'BANNERS' }));
@@ -989,12 +995,7 @@
       grid.appendChild(card);
     }
     inner.appendChild(grid);
-    inner.appendChild($('button', {
-      class: 'rpg-modal-close',
-      html: '\u00D7',
-      title: 'Close',
-      onclick: (e) => { e.stopPropagation(); m.remove(); }
-    }));
+    inner.appendChild($('button', { html: 'Close', onclick: () => m.remove() }));
     m.appendChild(inner);
     document.body.appendChild(m);
   };
