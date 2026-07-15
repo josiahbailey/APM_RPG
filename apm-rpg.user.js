@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.7.7
+// @version      0.7.8
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -390,16 +390,78 @@
   const LOCAL_VERSION = (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '0.0.0';
 
   // ---- Safe reload ----
-  // Hardcoded to the APM dashboard. EAM's SPA fragment routing breaks
-  // location.reload() and even a tenant-aware landing URL still lands on a
-  // stale page. Sending users to /web/base/COMMON is a guaranteed clean slate.
+  // EAM is a fragment-routed SPA on top of an iframe layout. Naive
+  // `window.top.location.href = X` navigations from a Tampermonkey userscript
+  // sandbox get intercepted by the SPA's history layer and land on a
+  // reconstructed/stale URL.
+  //
+  // APM Master's forceRedirect() (install.user.js) uses this exact pattern:
+  //   1. unsafeWindow (raw page window, bypasses TM's sandbox proxy)
+  //   2. .location.replace() (not .href = X) — the SPA can't intercept it the
+  //      same way and it bypasses history/hashchange handlers
+  //   3. Also sets a guard flag so double-triggers can't happen
+  //
+  // We copy that pattern here with multiple fallbacks. Every attempt is
+  // logged — if it still fails, open devtools and paste the [APM RPG] lines
+  // so we can see which path was reached and what threw.
   const RELOAD_URL = 'https://us1.eam.hxgnsmartcloud.com/web/base/logindisp?tenant=AMAZONRMENA_PRD';
   const safeReload = () => {
-    try { window.top.location.href = RELOAD_URL; return; }
-    catch (e) {}
-    try { window.location.href = RELOAD_URL; return; }
-    catch (e) {}
-    try { location.reload(); } catch (e) {}
+    if (typeof window !== 'undefined' && window.__apmRpgRedirecting) {
+      console.log('[APM RPG] safeReload: already redirecting, skipping');
+      return;
+    }
+    try { window.__apmRpgRedirecting = true; } catch (e) {}
+    console.log('[APM RPG] safeReload -> ' + RELOAD_URL);
+
+    // Best pointer to the raw page window — bypasses Tampermonkey's proxy.
+    const rawWin = (typeof unsafeWindow !== 'undefined' && unsafeWindow) ? unsafeWindow : null;
+
+    // Ordered navigation strategies. First to succeed wins.
+    const strategies = [];
+    if (rawWin) {
+      try {
+        const rawTop = rawWin.top;
+        if (rawTop && rawTop.location) {
+          strategies.push({ tag: 'unsafeWindow.top.location.replace', run: () => rawTop.location.replace(RELOAD_URL) });
+          strategies.push({ tag: 'unsafeWindow.top.location.assign',  run: () => rawTop.location.assign(RELOAD_URL) });
+          strategies.push({ tag: 'unsafeWindow.top.location.href',    run: () => { rawTop.location.href = RELOAD_URL; } });
+        }
+      } catch (e) { console.log('[APM RPG] safeReload: unsafeWindow.top unreachable:', e && e.message); }
+      try {
+        strategies.push({ tag: 'unsafeWindow.location.replace', run: () => rawWin.location.replace(RELOAD_URL) });
+        strategies.push({ tag: 'unsafeWindow.location.assign',  run: () => rawWin.location.assign(RELOAD_URL) });
+        strategies.push({ tag: 'unsafeWindow.location.href',    run: () => { rawWin.location.href = RELOAD_URL; } });
+      } catch (e) {}
+    }
+    // Sandbox fallbacks.
+    try {
+      const sTop = window.top;
+      if (sTop && sTop.location) {
+        strategies.push({ tag: 'window.top.location.replace', run: () => sTop.location.replace(RELOAD_URL) });
+        strategies.push({ tag: 'window.top.location.assign',  run: () => sTop.location.assign(RELOAD_URL) });
+        strategies.push({ tag: 'window.top.location.href',    run: () => { sTop.location.href = RELOAD_URL; } });
+      }
+    } catch (e) { console.log('[APM RPG] safeReload: window.top unreachable:', e && e.message); }
+    strategies.push({ tag: 'window.location.replace', run: () => window.location.replace(RELOAD_URL) });
+    strategies.push({ tag: 'window.location.assign',  run: () => window.location.assign(RELOAD_URL) });
+    strategies.push({ tag: 'window.location.href',    run: () => { window.location.href = RELOAD_URL; } });
+    // Last resort: open in a new tab (TM will still preserve the source tab)
+    strategies.push({ tag: 'window.open',             run: () => window.open(RELOAD_URL, '_top') });
+
+    for (const s of strategies) {
+      try {
+        console.log('[APM RPG] safeReload try:', s.tag);
+        s.run();
+        // Give the navigation a beat to actually kick off before trying another.
+        // If we're still here after 1s, the strategy silently no-oped — try next.
+        // But we return immediately; subsequent strategies fire only if this
+        // throws synchronously.
+        return;
+      } catch (e) {
+        console.log('[APM RPG] safeReload:', s.tag, 'threw:', e && e.message);
+      }
+    }
+    console.warn('[APM RPG] safeReload: all strategies exhausted');
   };
   const updateInfo = { checkedAt: 0, latest: null, available: false, newerLocalVersion: null };
   const loadUpdateCache = () => {
