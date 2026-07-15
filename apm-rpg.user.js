@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.7.28
+// @version      0.7.29
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -132,11 +132,23 @@
   // EAM SPA API endpoints match /web/base/<SCREEN>.xmlhttp. Heartbeat/keepalive
   // endpoints are noisy and excluded.
   const EAM_API_URL_RE       = /\/web\/base\/[A-Za-z0-9_]+\.xmlhttp/i;
-  const EAM_HEARTBEAT_RE     = /\/web\/base\/(?:SESSION|BSFOOTR|KEEPALIVE|BSTIMR)\.xmlhttp/i;
+  const EAM_HEARTBEAT_RE     = /(?:\/web\/base\/)?(?:SESSION|BSFOOTR|KEEPALIVE|BSTIMR|IDLTIMR)(?:\.xmlhttp)?(?:$|[?&])/i;
   // Request-body sniff: EAM sends workorderstatus=C for "Complete" (single C).
   const WOCOMPLETE_BODY_RE   = /(?:^|[?&;])workorderstatus=C(?![A-Z])/i;
   // Buttons that plausibly commit a WO save operation.
   const SAVE_BTN_TEXT_RE     = /^(?:save|ok|apply|submit|complete|save & close|save and close)$/i;
+  // Host-based classification (URL fallback when path regex doesn't match).
+  // EAM SPA fires XHRs with raw screen codes as relative paths (USRTAB, USAGE,
+  // etc.) — no /web/base/ prefix — so host is the only reliable signal.
+  const EAM_HOST_RE          = /(?:^|\.)eam\.(?:hxgnsmartcloud\.com|aws\.a2z\.com)$/i;
+  const PTP_HOST_RE          = /(?:^|\.)(?:ptp|insights)\.amazon\.dev$/i;
+  const resolveUrl = (u) => {
+    try { return new URL(String(u || ''), (typeof location !== 'undefined' ? location.href : undefined)).href; }
+    catch (e) { return String(u || ''); }
+  };
+  const hostOf = (u) => {
+    try { return new URL(u).hostname; } catch (e) { return ''; }
+  };
   const NAV_COOLDOWN_MS      = 2000;
   const PTP_XP_COOLDOWN_MS   = 30000;
   const COMPLETE_COOLDOWN_MS = 4000;
@@ -1384,16 +1396,24 @@
   };
   const classifyUrl = (url, from) => {
     if (!url) return;
+    const raw = String(url);
+    const abs = resolveUrl(raw);
+    const host = hostOf(abs);
     let matched = null;
-    if (PTP_START_URL_RE.test(url))         matched = 'PTP_START';
-    else if (EAM_HEARTBEAT_RE.test(url))    matched = 'HEARTBEAT (ignored)';
-    else if (PTP_COMPLETE_URL_RE.test(url)) matched = 'PTP_COMPLETE';
-    else if (EAM_API_URL_RE.test(url))      matched = 'EAM_API';
-    rpgLogUrl(from || 'unknown', url, matched);
-    if (matched === 'PTP_START')    { handlePTPCreated('xhr-url', url); return; }
-    if (matched === 'HEARTBEAT (ignored)') return;
-    if (matched === 'PTP_COMPLETE') { handleNavActivity('ptp-submit'); return; }
-    if (matched === 'EAM_API')      { handleNavActivity('eam-api'); return; }
+    // Path-based signals first (specific).
+    if (PTP_START_URL_RE.test(raw) || PTP_START_URL_RE.test(abs))         matched = 'PTP_START';
+    else if (EAM_HEARTBEAT_RE.test(raw))                                  matched = 'HEARTBEAT (ignored)';
+    else if (PTP_COMPLETE_URL_RE.test(raw) || PTP_COMPLETE_URL_RE.test(abs)) matched = 'PTP_COMPLETE';
+    else if (EAM_API_URL_RE.test(abs))                                    matched = 'EAM_API';
+    // Host-based fallback (broad).
+    else if (PTP_HOST_RE.test(host))                                      matched = 'PTP_ANY';
+    else if (EAM_HOST_RE.test(host))                                      matched = 'EAM_ANY';
+    rpgLogUrl(from || 'unknown', abs, matched);
+    if (matched === 'PTP_START')                { handlePTPCreated('xhr-url', abs); return; }
+    if (matched === 'HEARTBEAT (ignored)')      return;
+    if (matched === 'PTP_COMPLETE')             { handleNavActivity('ptp-submit'); return; }
+    if (matched === 'EAM_API' || matched === 'EAM_ANY') { handleNavActivity('eam-api'); return; }
+    if (matched === 'PTP_ANY')                  { handleNavActivity('ptp-any'); return; }
   };
 
   // ---- XHR hook ----
