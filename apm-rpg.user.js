@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.7.40
+// @version      0.7.41
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -1397,6 +1397,21 @@
   const QUADRANT_OUTER_V_MULT = 0.9;   // squash arc vertically -10%
   const QUADRANT_CENTER_Y_OFFSET = 50; // shift arc center down 50px so top doesn't reach as high
 
+  // ---- 3-corner bumpers ----
+  // Reject target angles in narrow windows at 0 (west/bottom), π/4 (diagonal),
+  // and π/2 (north/top) — pets no longer linger in those corners.
+  const BUMPER_ANGLES = [0, Math.PI / 4, Math.PI / 2];
+  const BUMPER_HALF_WIDTH = 0.18;      // ~10.3° each side of each corner
+  const BUMPER_VIZ_LEN    = 90;        // visual bumper length (px)
+  const BUMPER_VIZ_THICK  = 10;        // visual bumper thickness (px)
+
+  const isAngleBlocked = (angle) => {
+    for (const c of BUMPER_ANGLES) {
+      if (Math.abs(angle - c) < BUMPER_HALF_WIDTH) return true;
+    }
+    return false;
+  };
+
   const pickQuadrantPoint = (spriteW, spriteH, curX, curY, minMoveDist) => {
     const W = window.innerWidth, H = window.innerHeight;
     const baseR = Math.max(QUADRANT_INNER_R + 120, Math.min(W, H) * QUADRANT_OUTER_FRAC);
@@ -1408,19 +1423,76 @@
       const cx = W - Math.cos(angle) * radius * QUADRANT_OUTER_H_MULT;
       const cy = (H + QUADRANT_CENTER_Y_OFFSET) - Math.sin(angle) * radius * QUADRANT_OUTER_V_MULT;
       return {
+        angle: angle,
         x: clamp(cx - spriteW / 2, 0, Math.max(0, W - spriteW)),
         y: clamp(cy - spriteH / 2, 0, Math.max(0, H - spriteH)),
       };
     };
     for (let i = 0; i < 16; i++) {
       const t = generate();
+      if (isAngleBlocked(t.angle)) continue;
       if (Math.hypot(t.x - curX, t.y - curY) < minMoveDist) continue;
       return t;
     }
     return generate();
   };
 
-
+  // ---- boundary/bumper debug visualization ----
+  let boundaryVizOn = false;
+  let boundaryVizEl = null;
+  const rebuildBoundaryViz = () => {
+    if (boundaryVizEl) { boundaryVizEl.remove(); boundaryVizEl = null; }
+    if (!boundaryVizOn) return;
+    const W = window.innerWidth, H = window.innerHeight;
+    const baseR = Math.max(QUADRANT_INNER_R + 120, Math.min(W, H) * QUADRANT_OUTER_FRAC);
+    const arcW  = baseR * QUADRANT_OUTER_H_MULT;
+    const arcH  = baseR * QUADRANT_OUTER_V_MULT;
+    const cx = W, cy = H + QUADRANT_CENTER_Y_OFFSET;
+    const container = document.createElement('div');
+    container.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483200';
+    // Arc outline via SVG
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', W); svg.setAttribute('height', H);
+    svg.style.cssText = 'position:absolute;inset:0';
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    // Elliptical quarter-arc from (cx - arcW, cy) to (cx, cy - arcH).
+    path.setAttribute('d', 'M ' + (cx - arcW) + ' ' + cy + ' A ' + arcW + ' ' + arcH + ' 0 0 1 ' + cx + ' ' + (cy - arcH));
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', '#22c55e');
+    path.setAttribute('stroke-width', '2');
+    path.setAttribute('stroke-dasharray', '6 4');
+    path.setAttribute('opacity', '0.75');
+    svg.appendChild(path);
+    container.appendChild(svg);
+    // Three flat bumpers, tangent to the arc, angled toward its center.
+    for (const ang of BUMPER_ANGLES) {
+      const px = cx - Math.cos(ang) * arcW;
+      const py = cy - Math.sin(ang) * arcH;
+      const rotDeg = ang * 180 / Math.PI + 90; // perpendicular to radial
+      const b = document.createElement('div');
+      b.style.cssText =
+        'position:absolute;' +
+        'left:' + (px - BUMPER_VIZ_LEN / 2) + 'px;' +
+        'top:'  + (py - BUMPER_VIZ_THICK / 2) + 'px;' +
+        'width:'  + BUMPER_VIZ_LEN + 'px;' +
+        'height:' + BUMPER_VIZ_THICK + 'px;' +
+        'background:rgba(239,68,68,0.65);' +
+        'border:1px solid #ef4444;' +
+        'border-radius:3px;' +
+        'transform:rotate(' + rotDeg + 'deg);' +
+        'transform-origin:center;' +
+        'box-shadow:0 0 10px rgba(239,68,68,0.6)';
+      container.appendChild(b);
+    }
+    document.body.appendChild(container);
+    boundaryVizEl = container;
+  };
+  const setBoundaryViz = (on) => {
+    boundaryVizOn = !!on;
+    rebuildBoundaryViz();
+    return boundaryVizOn ? 'on' : 'off';
+  };
+  window.addEventListener('resize', () => { if (boundaryVizOn) rebuildBoundaryViz(); });
 
   // ================================================================
   // ROAMING PETS (up to 3, one per unlocked active slot)
@@ -1695,6 +1767,7 @@
       cacheIntervalMs: UPDATE_CHECK_INTERVAL_MS
     }),
     clearUpdateCache: () => { updateInfo.checkedAt = 0; updateInfo.latest = null; updateInfo.available = false; saveUpdateCache(); return 'cleared'; },
+    toggleBoundary: () => setBoundaryViz(!boundaryVizOn),
   };
   // Sandbox-context handle (works from Tampermonkey's isolated context).
   window.APM_RPG = APM_RPG_API;
@@ -1702,7 +1775,7 @@
   // Page-context bridge: Chrome's isolated worlds silently block cross-context
   // property writes via unsafeWindow, so instead we inject a proxy into the page
   // and communicate via postMessage. Methods become async on the page side.
-  const APM_RPG_METHODS = ['grantXP','setLevel','spawn','spawnVariant','rollSpawn','despawn','detect','setUsername','reset','checkUpdate','updateInfo','debugUpdate','clearUpdateCache'];
+  const APM_RPG_METHODS = ['grantXP','setLevel','spawn','spawnVariant','rollSpawn','despawn','detect','setUsername','reset','checkUpdate','updateInfo','debugUpdate','clearUpdateCache','toggleBoundary'];
 
   window.addEventListener('message', async (e) => {
     if (e.source !== window || !e.data || e.data.__apm_rpg !== 'call') return;
