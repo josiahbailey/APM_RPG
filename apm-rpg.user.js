@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.7.6
+// @version      0.7.7
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -393,7 +393,7 @@
   // Hardcoded to the APM dashboard. EAM's SPA fragment routing breaks
   // location.reload() and even a tenant-aware landing URL still lands on a
   // stale page. Sending users to /web/base/COMMON is a guaranteed clean slate.
-  const RELOAD_URL = 'https://us1.eam.hxgnsmartcloud.com/web/base/COMMON';
+  const RELOAD_URL = 'https://us1.eam.hxgnsmartcloud.com/web/base/logindisp?tenant=AMAZONRMENA_PRD';
   const safeReload = () => {
     try { window.top.location.href = RELOAD_URL; return; }
     catch (e) {}
