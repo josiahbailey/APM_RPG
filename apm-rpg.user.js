@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.7.16
+// @version      0.7.17
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -1378,6 +1378,102 @@
   };
 
   // ================================================================
+  // BOUNDARY DEBUG OVERLAY (temporary — remove when tuning is done)
+  //
+  // Draws the pet-arena arcs and panel no-go rect over the viewport so you can
+  // see exactly where the pets are constrained.  Toggle at runtime with
+  // APM_RPG.showBoundary(true|false).
+  // ================================================================
+  let SHOW_BOUNDARY = true;
+  let boundaryOverlay = null;
+  const drawBoundaryOverlay = () => {
+    if (!SHOW_BOUNDARY) {
+      if (boundaryOverlay) { boundaryOverlay.remove(); boundaryOverlay = null; }
+      return;
+    }
+    const W = window.innerWidth, H = window.innerHeight;
+    const baseR = Math.max(QUADRANT_INNER_R + 120, Math.min(W, H) * QUADRANT_OUTER_FRAC);
+    const innerAX = QUADRANT_INNER_R * QUADRANT_OUTER_H_MULT;
+    const innerAY = QUADRANT_INNER_R * QUADRANT_OUTER_V_MULT;
+    const outerAX = baseR * QUADRANT_OUTER_H_MULT;
+    const outerAY = baseR * QUADRANT_OUTER_V_MULT;
+    const arcPoints = (aX, aY) => {
+      const pts = [];
+      for (let i = 0; i <= 40; i++) {
+        const th = (i / 40) * (Math.PI / 2);
+        pts.push((W - Math.cos(th) * aX) + ',' + (H - Math.sin(th) * aY));
+      }
+      return pts.join(' ');
+    };
+    if (!boundaryOverlay) {
+      boundaryOverlay = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      boundaryOverlay.setAttribute('id', 'rpg-boundary-overlay');
+      Object.assign(boundaryOverlay.style, {
+        position: 'fixed', left: '0', top: '0', width: '100%', height: '100%',
+        pointerEvents: 'none', zIndex: '2147482800',
+      });
+      document.body.appendChild(boundaryOverlay);
+    }
+    boundaryOverlay.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+    boundaryOverlay.setAttribute('width', W);
+    boundaryOverlay.setAttribute('height', H);
+    boundaryOverlay.innerHTML = '';
+    // Outer boundary (green dashed)
+    const outer = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    outer.setAttribute('points', arcPoints(outerAX, outerAY));
+    outer.setAttribute('fill', 'none');
+    outer.setAttribute('stroke', '#4ade80');
+    outer.setAttribute('stroke-width', '2');
+    outer.setAttribute('stroke-dasharray', '8 6');
+    boundaryOverlay.appendChild(outer);
+    // Inner boundary (red dashed)
+    const inner = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+    inner.setAttribute('points', arcPoints(innerAX, innerAY));
+    inner.setAttribute('fill', 'none');
+    inner.setAttribute('stroke', '#f87171');
+    inner.setAttribute('stroke-width', '2');
+    inner.setAttribute('stroke-dasharray', '8 6');
+    boundaryOverlay.appendChild(inner);
+    // Panel no-go rect (yellow)
+    const noGo = getPanelNoGoRect();
+    if (noGo) {
+      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      rect.setAttribute('x', noGo.left);
+      rect.setAttribute('y', noGo.top);
+      rect.setAttribute('width', noGo.right - noGo.left);
+      rect.setAttribute('height', noGo.bottom - noGo.top);
+      rect.setAttribute('fill', 'rgba(250,204,21,0.08)');
+      rect.setAttribute('stroke', '#facc15');
+      rect.setAttribute('stroke-width', '2');
+      rect.setAttribute('stroke-dasharray', '6 4');
+      boundaryOverlay.appendChild(rect);
+    }
+    // Small legend in the top-left of the overlay
+    const legendBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    legendBg.setAttribute('x', '12'); legendBg.setAttribute('y', '12');
+    legendBg.setAttribute('width', '210'); legendBg.setAttribute('height', '68');
+    legendBg.setAttribute('fill', 'rgba(20,20,28,0.85)');
+    legendBg.setAttribute('rx', '6');
+    boundaryOverlay.appendChild(legendBg);
+    const legendLines = [
+      { txt: 'green: outer arc',  color: '#4ade80', y: 32 },
+      { txt: 'red: inner arc',    color: '#f87171', y: 50 },
+      { txt: 'yellow: UI no-go',  color: '#facc15', y: 68 },
+    ];
+    for (const l of legendLines) {
+      const t = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      t.setAttribute('x', '24'); t.setAttribute('y', l.y);
+      t.setAttribute('fill', l.color);
+      t.setAttribute('font-family', 'sans-serif');
+      t.setAttribute('font-size', '12');
+      t.setAttribute('font-weight', 'bold');
+      t.textContent = l.txt;
+      boundaryOverlay.appendChild(t);
+    }
+  };
+  window.addEventListener('resize', drawBoundaryOverlay);
+
+  // ================================================================
   // ROAMING PETS (up to 3, one per unlocked active slot)
   // ================================================================
   const roamers = [null, null, null];
@@ -1608,6 +1704,7 @@
     loadUpdateCache();
     buildPanel(); renderPanel();
     respawnAllRoamers();
+    drawBoundaryOverlay();
     // Roll a wild spawn shortly after load
     setTimeout(rollWildSpawn, 1500);
     // Starter pet choice for new users
@@ -1658,6 +1755,7 @@
       cacheIntervalMs: UPDATE_CHECK_INTERVAL_MS
     }),
     clearUpdateCache: () => { updateInfo.checkedAt = 0; updateInfo.latest = null; updateInfo.available = false; saveUpdateCache(); return 'cleared'; },
+    showBoundary: (on) => { SHOW_BOUNDARY = on !== false; drawBoundaryOverlay(); return SHOW_BOUNDARY ? 'shown' : 'hidden'; },
   };
   // Sandbox-context handle (works from Tampermonkey's isolated context).
   window.APM_RPG = APM_RPG_API;
