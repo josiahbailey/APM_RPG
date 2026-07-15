@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.7.14
+// @version      0.7.15
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -134,6 +134,7 @@
   const MOUSE_XP_AMOUNT = 5;
   const MOUSE_MAX_STEP_PX = 250;         // cap per-event to avoid cross-frame jumps
   const MOUSE_FLUSH_INTERVAL_MS = 1500;  // debounce persistence
+  const MOUSE_XP_DISTANCE_MULT = 50;     // credit multiplier — 1px moved = 50px counted
   const xpToNextLevel = (level) => Math.floor(100 * Math.pow(level, 1.35));
   const WILD_SPAWN_TICK_MS = 15000;
   const WILD_SPAWN_CHANCE  = 0.05;  // rolled once per page load / SPA nav
@@ -143,8 +144,8 @@
   // metadata block on update polls, then fetches the full file on install.
   const UPDATE_META_URL     = 'https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/apm-rpg.user.js';
   const UPDATE_DOWNLOAD_URL = 'https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/apm-rpg.user.js';
-  const UPDATE_CHECK_INTERVAL_MS = 15 * 1000;      // 15s rate limit on actual HTTP fetch
-  const UPDATE_POLL_INTERVAL_MS  = 15 * 1000;      // 15s polling tick (each tick respects rate limit)
+  const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;  // 5 minutes (rate limit; force=true bypasses)
+  const UPDATE_POLL_INTERVAL_MS  = 60 * 1000;      // how often to *try* checks (each try respects the rate limit)
   const UPDATE_CACHE_KEY    = 'apm_rpg_update_v1';
   // Variant rarities. Each spawn independently rolls for the rarest tier down.
   // 'normal' is the fallthrough — all four are catch-rate multipliers over base.
@@ -377,7 +378,7 @@
       const x = e.clientX, y = e.clientY;
       if (lastX !== null) {
         const d = Math.min(MOUSE_MAX_STEP_PX, Math.hypot(x - lastX, y - lastY));
-        buffer += d;
+        buffer += d * MOUSE_XP_DISTANCE_MULT;
         if (!flushTimer) flushTimer = setTimeout(flush, MOUSE_FLUSH_INTERVAL_MS);
       }
       lastX = x; lastY = y;
@@ -563,17 +564,9 @@
           updateInfo.checkedAt = Date.now();
           updateInfo.latest = m[1].trim();
           updateInfo.available = cmpVersion(updateInfo.latest, LOCAL_VERSION) > 0;
-          // Optimistic RELOAD: as soon as GitHub is newer, assume TM either has
-          // (auto-update) or will soon have the new version. Setting
-          // pendingInstallVersion causes the toast to render as RELOAD without
-          // needing another tab to boot and broadcast K.installedVersion.
-          if (updateInfo.available && !updateInfo.pendingInstallVersion) {
-            updateInfo.pendingInstallVersion = updateInfo.latest;
-          }
           saveUpdateCache();
           if (typeof renderPanel === 'function') renderPanel();
           console.log('[APM RPG] update check: local=' + LOCAL_VERSION + ' latest=' + updateInfo.latest + ' available=' + updateInfo.available);
-          try { if (typeof renderPanel === 'function' && el && el.panel) renderPanel(); } catch (e) {}
           resolve({ local: LOCAL_VERSION, latest: updateInfo.latest, available: updateInfo.available });
         },
         onerror: (e) => {
