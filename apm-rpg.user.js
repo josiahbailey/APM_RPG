@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.7.11
+// @version      0.7.13
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -143,8 +143,8 @@
   // metadata block on update polls, then fetches the full file on install.
   const UPDATE_META_URL     = 'https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/apm-rpg.user.js';
   const UPDATE_DOWNLOAD_URL = 'https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/apm-rpg.user.js';
-  const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;  // 5 minutes (rate limit; force=true bypasses)
-  const UPDATE_POLL_INTERVAL_MS  = 60 * 1000;      // how often to *try* checks (each try respects the rate limit)
+  const UPDATE_CHECK_INTERVAL_MS = 15 * 1000;      // 15s rate limit on actual HTTP fetch
+  const UPDATE_POLL_INTERVAL_MS  = 15 * 1000;      // 15s polling tick (each tick respects rate limit)
   const UPDATE_CACHE_KEY    = 'apm_rpg_update_v1';
   // Variant rarities. Each spawn independently rolls for the rarest tier down.
   // 'normal' is the fallthrough — all four are catch-rate multipliers over base.
@@ -563,9 +563,17 @@
           updateInfo.checkedAt = Date.now();
           updateInfo.latest = m[1].trim();
           updateInfo.available = cmpVersion(updateInfo.latest, LOCAL_VERSION) > 0;
+          // Optimistic RELOAD: as soon as GitHub is newer, assume TM either has
+          // (auto-update) or will soon have the new version. Setting
+          // pendingInstallVersion causes the toast to render as RELOAD without
+          // needing another tab to boot and broadcast K.installedVersion.
+          if (updateInfo.available && !updateInfo.pendingInstallVersion) {
+            updateInfo.pendingInstallVersion = updateInfo.latest;
+          }
           saveUpdateCache();
           if (typeof renderPanel === 'function') renderPanel();
           console.log('[APM RPG] update check: local=' + LOCAL_VERSION + ' latest=' + updateInfo.latest + ' available=' + updateInfo.available);
+          try { if (typeof renderPanel === 'function' && el && el.panel) renderPanel(); } catch (e) {}
           resolve({ local: LOCAL_VERSION, latest: updateInfo.latest, available: updateInfo.available });
         },
         onerror: (e) => {
@@ -1419,17 +1427,15 @@
   // ================================================================
   const QUADRANT_INNER_R = 260;
   const QUADRANT_OUTER_FRAC = 0.78;
-  const QUADRANT_CENTER_Y_OFFSET = 200;  // shift arc center below the viewport bottom -> pets stay lower
   const pickQuadrantPoint = (spriteW, spriteH, curX, curY, minMoveDist) => {
     const W = window.innerWidth, H = window.innerHeight;
-    const centerY = H + QUADRANT_CENTER_Y_OFFSET;
     const outerR = Math.max(QUADRANT_INNER_R + 120, Math.min(W, H) * QUADRANT_OUTER_FRAC);
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
     const generate = () => {
       const angle = Math.random() * (Math.PI / 2);           // 0 = west, π/2 = north
       const radius = QUADRANT_INNER_R + Math.random() * (outerR - QUADRANT_INNER_R);
       const cx = W - Math.cos(angle) * radius;               // sprite CENTER x
-      const cy = centerY - Math.sin(angle) * radius;         // sprite CENTER y (arc center shifted down)
+      const cy = H - Math.sin(angle) * radius;               // sprite CENTER y
       return {
         x: clamp(cx - spriteW / 2, 0, Math.max(0, W - spriteW)),
         y: clamp(cy - spriteH / 2, 0, Math.max(0, H - spriteH)),
