@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.7.27
+// @version      0.7.28
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -9,7 +9,7 @@
 // @match        https://*.eam.aws.a2z.com/*
 // @match        https://*.ptp.amazon.dev/*
 // @match        https://*.insights.amazon.dev/*
-// @run-at       document-idle
+// @run-at       document-start
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_deleteValue
@@ -1554,6 +1554,14 @@
     } catch (e) {}
   };
 
+  // Wire action detection immediately at document-start so we install our
+  // XHR/fetch/history hooks BEFORE page scripts can capture the originals.
+  try {
+    setupActionDetection();
+  } catch (e) {
+    console.error('[APM RPG] setupActionDetection failed at document-start:', e);
+  }
+
   // ================================================================
   // MOVEMENT HELPER — quarter-circle boundary around the bottom-right UI.
   //
@@ -1849,7 +1857,6 @@
 
   console.log('[APM RPG] v' + LOCAL_VERSION + ' loaded');
     setupMultiTabSync();
-    setupActionDetection();
     bumpInstalledVersion();
     loadUpdateCache();
     buildPanel(); renderPanel();
