@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.6.4
+// @version      0.6.6
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -132,6 +132,7 @@
     version: 'apm_rpg_version', player: 'apm_rpg_player_v2',
     collection: 'apm_rpg_collection_v2', equip: 'apm_rpg_equip_v2',
     starter: 'apm_rpg_starter_granted',
+    installedVersion: 'apm_rpg_installed_version_v1',
     v1_player: 'apm_rpg_player_v1', v1_pets: 'apm_rpg_pets_v1', v1_equip: 'apm_rpg_equip_v1',
   };
   const _devSink = {};
@@ -215,6 +216,25 @@
   // ================================================================
   // MULTI-TAB SYNC — other tabs pick up state changes in real time
   // ================================================================
+  // Cross-tab installed-version detection: any tab that reboots with a newer
+  // script writes its LOCAL_VERSION to K.installedVersion. Older tabs listen and
+  // surface a "reload to use vX.Y.Z" prompt in place of the GitHub update button.
+  const bumpInstalledVersion = () => {
+    try {
+      const stored = readRaw(K.installedVersion);
+      const parsed = stored ? JSON.parse(stored) : null;
+      if (!parsed || cmpVersion(LOCAL_VERSION, parsed) > 0) {
+        save(K.installedVersion, LOCAL_VERSION);
+        updateInfo.newerLocalVersion = null;  // we are the newest
+      } else if (cmpVersion(parsed, LOCAL_VERSION) > 0) {
+        updateInfo.newerLocalVersion = parsed;
+        console.log('[APM RPG] a newer version (' + parsed + ') is installed; reload to activate');
+      } else {
+        updateInfo.newerLocalVersion = null;  // exact match
+      }
+    } catch (e) {}
+  };
+
   const setupMultiTabSync = () => {
     if (typeof GM_addValueChangeListener === 'undefined') {
       console.log('[APM RPG] multi-tab sync unavailable (GM_addValueChangeListener not granted)');
@@ -245,6 +265,17 @@
     GM_addValueChangeListener(K.player,     onRemote);
     GM_addValueChangeListener(K.collection, onRemote);
     GM_addValueChangeListener(K.equip,      onRemote);
+    GM_addValueChangeListener(K.installedVersion, (name, oldRaw, newRaw, remote) => {
+      if (!remote) return;
+      try {
+        const v = newRaw ? JSON.parse(newRaw) : null;
+        if (v && cmpVersion(v, LOCAL_VERSION) > 0) {
+          updateInfo.newerLocalVersion = v;
+          console.log('[APM RPG] newer version installed remotely: v' + v);
+          if (typeof renderPanel === 'function') renderPanel();
+        }
+      } catch (e) {}
+    });
     console.log('[APM RPG] multi-tab sync active');
   };
 
@@ -293,7 +324,7 @@
     return 0;
   };
   const LOCAL_VERSION = (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '0.0.0';
-  const updateInfo = { checkedAt: 0, latest: null, available: false };
+  const updateInfo = { checkedAt: 0, latest: null, available: false, newerLocalVersion: null };
   const loadUpdateCache = () => {
     try {
       const raw = (typeof GM_getValue !== 'undefined') ? GM_getValue(UPDATE_CACHE_KEY) : null;
@@ -525,7 +556,9 @@
     '.rpg-version{font-size:9px;color:#666;text-align:center;letter-spacing:0.5px;font-weight:600;user-select:text;margin-top:auto}',
     '.rpg-reset-btn{position:fixed;left:12px;bottom:12px;z-index:2147483000;font-size:9px;padding:3px 7px;background:rgba(40,0,0,0.8);color:#f77;border:1px solid #633;border-radius:4px;cursor:pointer;opacity:0.5}.rpg-reset-btn:hover{opacity:1;background:#400}',
     '.rpg-update-toast{position:fixed;right:16px;bottom:120px;z-index:2147483001;padding:8px 16px;font-size:12px;font-weight:800;letter-spacing:0.6px;border-radius:8px;cursor:pointer;background:linear-gradient(135deg,#22c55e,#15803d);color:#fff;border:1px solid #16a34a;box-shadow:0 4px 14px rgba(34,197,94,0.4);animation:rpgUpdatePulse 2s ease-in-out infinite;transition:transform 0.15s ease}.rpg-update-toast:hover{filter:brightness(1.15);transform:translateY(-1px)}.rpg-update-toast:active{transform:translateY(0)}',
+    '.rpg-update-toast.rpg-reload-mode{background:linear-gradient(135deg,#f97316,#c2410c);border-color:#ea580c;box-shadow:0 4px 14px rgba(249,115,22,0.45);animation:rpgReloadPulse 2s ease-in-out infinite}',
     '@keyframes rpgUpdatePulse{0%,100%{box-shadow:0 4px 14px rgba(34,197,94,0.4)}50%{box-shadow:0 4px 18px rgba(34,197,94,0.75),0 0 0 6px rgba(34,197,94,0.15)}}',
+    '@keyframes rpgReloadPulse{0%,100%{box-shadow:0 4px 14px rgba(249,115,22,0.45)}50%{box-shadow:0 4px 18px rgba(249,115,22,0.8),0 0 0 6px rgba(249,115,22,0.18)}}',
     '.rpg-menu{position:fixed;right:16px;bottom:110px;z-index:2147483001;background:rgba(20,20,28,0.97);border:1px solid #3b3b48;border-radius:12px;padding:12px;color:#eee;max-width:380px;max-height:60vh;overflow-y:auto;box-shadow:0 10px 30px rgba(0,0,0,0.6)}',
     '.rpg-menu h4{margin:0 0 8px;font-size:12px;color:#ffd166}',
     '.rpg-menu-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}',
@@ -685,10 +718,11 @@
       class: 'rpg-update-toast',
       title: 'A new version is available. Click to install.',
       onclick: () => {
+        // If a newer version is already installed elsewhere, just reload this tab.
+        if (updateInfo.newerLocalVersion) { location.reload(); return; }
+        // Otherwise open the raw URL for Tampermonkey to install.
         if (UPDATE_DOWNLOAD_URL && UPDATE_DOWNLOAD_URL.indexOf('REPLACE_ME') === -1) {
           window.open(UPDATE_DOWNLOAD_URL, '_blank');
-          // Close this tab so a fresh page load picks up the new version after install
-          setTimeout(() => { try { window.close(); } catch (e) {} }, 200);
         }
       }
     });
@@ -757,17 +791,27 @@
     el.xpTxt.textContent = 'EXP ' + state.player.xp + ' / ' + need;
     if (el.hidePetsBtn) el.hidePetsBtn.textContent = state.player.hideRoamers ? 'Show Pets' : 'Hide Pets';
     if (el.updateBtn) {
-      if (updateInfo.available && updateInfo.latest) {
-        el.updateBtn.innerHTML = 'UPDATE \u2192 v' + updateInfo.latest;
+      // Priority: reload-for-newer-installed > github-update-available > hidden
+      if (updateInfo.newerLocalVersion) {
+        el.updateBtn.innerHTML = 'RELOAD FOR v' + updateInfo.newerLocalVersion;
+        el.updateBtn.title = 'A newer version is already installed. Click to reload this tab.';
+        el.updateBtn.classList.add('rpg-reload-mode');
         el.updateBtn.style.display = '';
-        // Position just above the panel (recalc on every render so it tracks size)
+      } else if (updateInfo.available && updateInfo.latest) {
+        el.updateBtn.innerHTML = 'UPDATE \u2192 v' + updateInfo.latest;
+        el.updateBtn.title = 'A new version is available. Click to install.';
+        el.updateBtn.classList.remove('rpg-reload-mode');
+        el.updateBtn.style.display = '';
+      } else {
+        el.updateBtn.classList.remove('rpg-reload-mode');
+        el.updateBtn.style.display = 'none';
+      }
+      if (el.updateBtn.style.display === '') {
         requestAnimationFrame(() => {
           if (!el.panel || !el.updateBtn) return;
           const r = el.panel.getBoundingClientRect();
           el.updateBtn.style.bottom = Math.max(16, window.innerHeight - r.top + 8) + 'px';
         });
-      } else {
-        el.updateBtn.style.display = 'none';
       }
     }
   };
@@ -1342,6 +1386,7 @@
   const boot = () => {
     console.log('[APM RPG] v' + LOCAL_VERSION + ' loaded');
     setupMultiTabSync();
+    bumpInstalledVersion();
     loadUpdateCache();
     buildPanel(); renderPanel();
     respawnAllRoamers();
@@ -1383,9 +1428,11 @@
     updateInfo: () => ({ local: LOCAL_VERSION, latest: updateInfo.latest, available: updateInfo.available, checkedAt: updateInfo.checkedAt ? new Date(updateInfo.checkedAt).toISOString() : 'never', url: UPDATE_DOWNLOAD_URL }),
     debugUpdate: () => ({
       local: LOCAL_VERSION,
-      updateInfo: { latest: updateInfo.latest, available: updateInfo.available, checkedAt: updateInfo.checkedAt ? new Date(updateInfo.checkedAt).toISOString() : 'never' },
+      updateInfo: { latest: updateInfo.latest, available: updateInfo.available, newerLocalVersion: updateInfo.newerLocalVersion, checkedAt: updateInfo.checkedAt ? new Date(updateInfo.checkedAt).toISOString() : 'never' },
+      installedRecord: (() => { try { return JSON.parse(readRaw(K.installedVersion)); } catch(e) { return null; } })(),
       url: UPDATE_META_URL,
       hasGmXhr: typeof GM_xmlhttpRequest !== 'undefined',
+      hasChangeListener: typeof GM_addValueChangeListener !== 'undefined',
       grants: (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.grant) || [],
       buttonExists: !!(el && el.updateBtn),
       buttonVisible: !!(el && el.updateBtn && el.updateBtn.style.display !== 'none'),
