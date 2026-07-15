@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.7.30
+// @version      0.7.31
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -293,7 +293,7 @@
   migrateStorage();
 
   const state = {
-    player: load(K.player, { level:1, xp:0, username:null, characterId:(CHARACTERS[0]&&CHARACTERS[0].id), hideRoamers:false }),
+    player: load(K.player, { level:1, xp:0, username:null, characterId:(CHARACTERS[0]&&CHARACTERS[0].id), hideRoamers:false, panelCollapsed:false }),
     collection: load(K.collection, []),
     equip: load(K.equip, { characterId:(CHARACTERS[0]&&CHARACTERS[0].id), petInstanceIds:[null,null,null], bannerId:'bn_none' }),
   };
@@ -704,7 +704,11 @@
   // ================================================================
   GM_addStyle([
     '.rpg-root,.rpg-root *{box-sizing:border-box;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}',
-    '.rpg-panel{position:fixed;right:16px;bottom:16px;z-index:2147483000;background:rgba(20,20,28,0.45);color:#eee;border:1px solid #3b3b48;border-radius:12px;padding:10px;display:flex;gap:10px;align-items:center;box-shadow:0 8px 24px rgba(0,0,0,0.5);backdrop-filter:blur(2px);user-select:none}',
+    '.rpg-panel-wrap{position:fixed;right:16px;bottom:16px;z-index:2147483000;display:flex;align-items:stretch;transition:transform 320ms cubic-bezier(0.4,0,0.2,1)}',
+    '.rpg-panel-wrap.rpg-collapsed{transform:translateX(calc(100% - 20px))}',
+    '.rpg-panel-tab{width:20px;min-height:60px;align-self:center;background:rgba(20,20,28,0.85);color:#ffd166;border:1px solid #3b3b48;border-right:none;border-radius:8px 0 0 8px;cursor:pointer;writing-mode:vertical-rl;text-orientation:mixed;display:flex;align-items:center;justify-content:center;font-weight:800;letter-spacing:3px;font-size:11px;user-select:none;transition:background 150ms,color 150ms;backdrop-filter:blur(2px);box-shadow:-3px 0 8px rgba(0,0,0,0.3)}',
+    '.rpg-panel-tab:hover{background:rgba(40,40,55,0.95);color:#fff}',
+    '.rpg-panel{position:relative;background:rgba(20,20,28,0.45);color:#eee;border:1px solid #3b3b48;border-radius:12px;padding:10px;display:flex;gap:10px;align-items:center;box-shadow:0 8px 24px rgba(0,0,0,0.5);backdrop-filter:blur(2px);user-select:none}',
     '.rpg-slot-container{display:flex;align-items:center;flex-shrink:0}',
     '.rpg-left-col{display:flex;flex-direction:column;gap:4px;align-items:stretch}',
     '.rpg-hide-btn{padding:2px 6px;font-size:9px;font-weight:700;border:1px solid #444;border-radius:4px;background:#22222c;color:#999;cursor:pointer;letter-spacing:0.3px;text-transform:uppercase}.rpg-hide-btn:hover{background:#2f2f3b;color:#ddd;border-color:#555}',
@@ -897,7 +901,25 @@
     xpRow.appendChild($('div', { class: 'rpg-version', html: 'v' + LOCAL_VERSION, title: 'Installed version' }));
     el.stats.append(nameRow, el.level, el.bar, xpRow);
     el.panel.appendChild(el.stats);
-    root.appendChild(el.panel);
+    // Wrap the panel in a container that also holds a slide-out tab. Clicking
+    // the tab translates the wrapper so only the tab stays on-screen — roamers
+    // are top-level absolute elements outside this wrap, so they're unaffected.
+    el.panelWrap = $('div', {
+      class: 'rpg-panel-wrap' + (state.player.panelCollapsed ? ' rpg-collapsed' : ''),
+    });
+    el.panelTab = $('div', {
+      class: 'rpg-panel-tab',
+      title: 'Toggle RPG panel (roamers keep going)',
+      html: 'RPG',
+      onclick: () => {
+        state.player.panelCollapsed = !state.player.panelCollapsed;
+        persistPlayer();
+        el.panelWrap.classList.toggle('rpg-collapsed', !!state.player.panelCollapsed);
+      }
+    });
+    el.panelWrap.appendChild(el.panelTab);
+    el.panelWrap.appendChild(el.panel);
+    root.appendChild(el.panelWrap);
     // Floating update toast — appears above the panel when a newer version is on GitHub.
     el.updateBtn = $('button', {
       class: 'rpg-update-toast',
