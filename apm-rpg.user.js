@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.5.9
+// @version      0.6.2
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -15,6 +15,7 @@
 // @grant        GM_deleteValue
 // @grant        GM_addStyle
 // @grant        GM_xmlhttpRequest
+// @grant        GM_addValueChangeListener
 // @grant        unsafeWindow
 // @connect      raw.githubusercontent.com
 // @updateURL    https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/apm-rpg.user.js
@@ -59,16 +60,17 @@
   ];
 
   const PETS = [
-    // shinyImg / goldImg / rainbowImg are OPTIONAL — if omitted, CSS transforms the base image so variants remain visually distinct.
+    // shinyImg / hollowImg / rainbowImg are OPTIONAL — if omitted, CSS transforms the base image so variants remain visually distinct.
     { id: 'pt_slime',  name: 'Slime',    img: 'https://placehold.co/96x96/84cc16/1a1a1a?text=Slime',   shinyImg: 'https://placehold.co/96x96/facc15/1a1a1a?text=S-Slime',   rarity: 'Common',    spawnWeight: 60, catchBaseRate: 0.70 },
     { id: 'pt_fox',    name: 'Fox',      img: 'https://placehold.co/96x96/f97316/ffffff?text=Fox',     shinyImg: 'https://placehold.co/96x96/06b6d4/ffffff?text=S-Fox',     rarity: 'Rare',      spawnWeight: 30, catchBaseRate: 0.35 },
     { id: 'pt_dragon', name: 'Dragonet', img: 'https://placehold.co/96x96/ef4444/ffffff?text=Dragon',  shinyImg: 'https://placehold.co/96x96/e879f9/ffffff?text=S-Dragon',  rarity: 'Legendary', spawnWeight: 10, catchBaseRate: 0.10 },
   ];
 
-  const XP_REWARDS = { completeWorkOrder: 50, createWorkOrder: 30, submitPTP: 40 };
+  const XP_REWARDS = { completeWorkOrder: 10, pageChange: 5 };
+  const PAGE_CHANGE_XP_CHANCE = 0.10;  // 10% chance to award XP on SPA nav
   const xpToNextLevel = (level) => Math.floor(100 * Math.pow(level, 1.35));
   const WILD_SPAWN_TICK_MS = 15000;
-  const WILD_SPAWN_CHANCE  = 0.03;  // rolled once per page load / SPA nav
+  const WILD_SPAWN_CHANCE  = 0.05;  // rolled once per page load / SPA nav
   const CATCHERS_PER_SPAWN = 3;
   // Hosted at https://github.com/josiahbailey/APM_RPG (public GitHub).
   // Same URL for @updateURL and @downloadURL — Tampermonkey only reads the
@@ -83,11 +85,11 @@
     // catchMult: multiplier vs the pet's base catchBaseRate. All variants use
     // the same rate as normal — the rarity is in the spawn chance itself.
     normal:  { label: 'Normal',  catchMult: 1.0, chance: 1,      badge: '',        color: '#888' },
-    shiny:   { label: 'Shiny',   catchMult: 1.0, chance: 0.001,  badge: '\u2605', color: '#facc15' },
-    gold:    { label: 'Gold',    catchMult: 1.0, chance: 0.0003, badge: '\u25C6', color: '#f59e0b' },
-    rainbow: { label: 'Rainbow', catchMult: 1.0, chance: 0.0001, badge: '\u2726', color: 'rainbow' },
+    shiny:   { label: 'Shiny',   catchMult: 1.0, chance: 0.01,   badge: '\u2605', color: '#facc15' },
+    hollow:  { label: 'Hollow',  catchMult: 1.0, chance: 0.005,  badge: '\u25C6', color: '#cbd5e1' },
+    rainbow: { label: 'Rainbow', catchMult: 1.0, chance: 0.001,  badge: '\u2726', color: 'rainbow' },
   };
-  const VARIANT_ORDER = ['rainbow', 'gold', 'shiny']; // rarest first
+  const VARIANT_ORDER = ['rainbow', 'hollow', 'shiny']; // rarest first
   const PORTRAIT_PX = 72;
   const PET_ICON_PX = 48;
 
@@ -125,7 +127,7 @@
   // ================================================================
   // STORAGE
   // ================================================================
-  const STORAGE_VERSION = 4;
+  const STORAGE_VERSION = 5;
   const K = {
     version: 'apm_rpg_version', player: 'apm_rpg_player_v2',
     collection: 'apm_rpg_collection_v2', equip: 'apm_rpg_equip_v2',
@@ -186,6 +188,17 @@
         save(K.collection, col);
       }
     }
+    // v4 → v5: rename 'gold' variant to 'hollow'
+    if (ver < 5) {
+      const col = load(K.collection, null);
+      if (Array.isArray(col)) {
+        let changed = false;
+        for (const inst of col) {
+          if (inst && inst.variant === 'gold') { inst.variant = 'hollow'; changed = true; }
+        }
+        if (changed) save(K.collection, col);
+      }
+    }
     save(K.version, STORAGE_VERSION);
   };
   migrateStorage();
@@ -199,16 +212,47 @@
   const persistCollection = () => save(K.collection, state.collection);
   const persistEquip = () => save(K.equip, state.equip);
 
+  // ================================================================
+  // MULTI-TAB SYNC — other tabs pick up state changes in real time
+  // ================================================================
+  const setupMultiTabSync = () => {
+    if (typeof GM_addValueChangeListener === 'undefined') {
+      console.log('[APM RPG] multi-tab sync unavailable (GM_addValueChangeListener not granted)');
+      return;
+    }
+    const onRemote = (name, oldRaw, newRaw, remote) => {
+      if (!remote) return;  // ignore our own writes
+      try {
+        const parsed = newRaw ? JSON.parse(newRaw) : null;
+        if (parsed == null) return;
+        if (name === K.player) {
+          state.player = parsed;
+        } else if (name === K.collection) {
+          state.collection = parsed;
+        } else if (name === K.equip) {
+          state.equip = parsed;
+          if (!Array.isArray(state.equip.petInstanceIds)) state.equip.petInstanceIds = [null, null, null];
+          if (state.equip.bannerId == null) state.equip.bannerId = 'bn_none';
+        }
+        if (typeof renderPanel === 'function' && el && el.panel) renderPanel();
+        if ((name === K.equip || name === K.collection) && typeof respawnAllRoamers === 'function') {
+          respawnAllRoamers();
+        }
+      } catch (e) {
+        console.warn('[APM RPG] remote sync failed for', name, e);
+      }
+    };
+    GM_addValueChangeListener(K.player,     onRemote);
+    GM_addValueChangeListener(K.collection, onRemote);
+    GM_addValueChangeListener(K.equip,      onRemote);
+    console.log('[APM RPG] multi-tab sync active');
+  };
+
   // Ensure equip has v3 shape even if a stale object was loaded
   if (!Array.isArray(state.equip.petInstanceIds)) state.equip.petInstanceIds = [null, null, null];
   if (state.equip.bannerId == null) state.equip.bannerId = 'bn_none';
 
-  if (!readRaw(K.starter) && state.collection.length === 0 && PETS.length > 0) {
-    const inst = { instanceId:'starter_'+Date.now(), petId:PETS[0].id, shiny:false, caughtAt:Date.now() };
-    state.collection.push(inst);
-    state.equip.petInstanceIds[0] = inst.instanceId;
-    persistCollection(); persistEquip(); writeRaw(K.starter, '1');
-  }
+  // Starter pet is granted via choice modal (shown at boot if collection is empty).
 
   // ================================================================
   // HELPERS
@@ -325,7 +369,7 @@
   });
   const variantBadge = (v) => (VARIANT_META[v] && VARIANT_META[v].badge) || '';
   const variantLabel = (v) => (VARIANT_META[v] && VARIANT_META[v].label) || 'Normal';
-  const variantImgField = { shiny: 'shinyImg', gold: 'goldImg', rainbow: 'rainbowImg' };
+  const variantImgField = { shiny: 'shinyImg', hollow: 'hollowImg', rainbow: 'rainbowImg' };
   const petImg = (pet, variant) => {
     if (variant && variant !== 'normal' && pet[variantImgField[variant]]) return pet[variantImgField[variant]];
     return pet.img;
@@ -466,7 +510,11 @@
     '.rpg-slot img{width:100%;height:100%;object-fit:cover;display:block}',
     '.rpg-slot.pet{width:'+PET_ICON_PX+'px;height:'+PET_ICON_PX+'px}',
     '.rpg-slot .rpg-slot-badge{position:absolute;bottom:0;left:0;right:0;font-size:10px;background:rgba(0,0,0,0.7);text-align:center;padding:1px 2px}',
-    '.rpg-stats{min-width:140px}',
+    '.rpg-stats{min-width:140px;position:relative}',
+    '.rpg-xp-gain{position:absolute;right:4px;top:0;font-size:12px;font-weight:800;color:#22c55e;text-shadow:0 1px 3px rgba(0,0,0,0.7),0 0 6px rgba(34,197,94,0.5);pointer-events:none;z-index:5;white-space:nowrap;animation:rpgXpGain 1.2s cubic-bezier(0.22,1,0.36,1) forwards}',
+    '@keyframes rpgXpGain{0%{opacity:0;transform:translateY(0) scale(0.5)}15%{opacity:1;transform:translateY(-4px) scale(1.1)}25%{transform:translateY(-6px) scale(1)}100%{opacity:0;transform:translateY(-34px) scale(1)}}',
+    '.rpg-bar-pulse{animation:rpgBarPulse 500ms ease-out}',
+    '@keyframes rpgBarPulse{0%,100%{transform:scaleX(1);box-shadow:none}40%{transform:scaleX(1.03);box-shadow:0 0 8px rgba(34,197,94,0.6)}}',
     '.rpg-name{font-size:12px;font-weight:600;cursor:pointer}.rpg-name:hover{text-decoration:underline dotted}',
     '.rpg-level{font-size:11px;color:#ffd166;margin-top:2px}',
     '.rpg-bar{width:100%;height:8px;background:#2a2a36;border-radius:4px;overflow:hidden;margin-top:4px}',
@@ -488,13 +536,8 @@
     '.rpg-menu-item .n{font-size:11px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
     '.rpg-menu-item .l{font-size:10px;color:#ffd166}',
     '.rpg-empty-msg{font-size:12px;color:#888;padding:12px 0}',
-    '.rpg-dex{max-width:420px;text-align:left}',
-    '.rpg-dex-list{max-height:50vh;overflow-y:auto}',
-    '.rpg-dex-row{display:flex;gap:10px;margin-bottom:10px;padding:6px;background:#1e1e2e;border-radius:8px}',
-    '.rpg-dex-cell{text-align:center;width:90px;flex-shrink:0}',
-    '.rpg-dex-cell img{width:56px;height:56px;object-fit:cover;border-radius:6px;display:block;margin:0 auto}',
-    '.rpg-dex-cell .n{font-size:11px;margin-top:3px}.rpg-dex-cell .c{font-size:10px;color:#aaa}',
-    '.rpg-dex-silhouette img{filter:brightness(0) opacity(0.4)}.rpg-dex-silhouette .n{color:#555}',
+    '.rpg-dex{max-width:520px;text-align:left}',
+    '.rpg-dex-list{max-height:55vh;overflow-y:auto}',
     '.rpg-roam{position:fixed;z-index:2147482900;pointer-events:none;transition:left 10s linear,top 10s linear}',
     '.rpg-roam img{width:64px;height:64px;object-fit:contain;filter:drop-shadow(0 4px 6px rgba(0,0,0,0.4))}',
     '.rpg-roam .label{font-size:11px;text-align:center;color:#fff;text-shadow:0 1px 2px #000,0 0 4px #000}',
@@ -544,14 +587,23 @@
     '.rpg-locked:hover{filter:grayscale(0.9) brightness(0.7)}',
     '.rpg-lock-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#ffd166;text-shadow:0 1px 3px #000,0 0 6px #000;letter-spacing:0.5px;pointer-events:none;background:rgba(0,0,0,0.35);border-radius:6px}',
     '.rpg-menu-item.rpg-in-other-slot{outline:1px dashed #666}',
-    '.rpg-in-slot-tag{position:absolute;top:2px;right:2px;font-size:9px;background:rgba(0,0,0,0.7);color:#ffd166;padding:1px 4px;border-radius:3px;font-weight:700}',
+    '.rpg-in-slot-tag{position:absolute;top:2px;left:2px;font-size:9px;background:rgba(0,0,0,0.7);color:#ffd166;padding:1px 4px;border-radius:3px;font-weight:700}',
+    '.rpg-menu-del{position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;background:rgba(220,38,38,0.75);color:#fff;font-size:13px;font-weight:900;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:3;line-height:1;transition:transform 120ms,background 120ms;opacity:0.7}.rpg-menu-del:hover{background:#dc2626;transform:scale(1.15);opacity:1}',
     '.rpg-menu-item{position:relative}',
-    // ── Gold variant (warm metallic sheen) ──────────────────────
-    '.rpg-gold img{filter:brightness(1.15) contrast(1.08) saturate(1.6) drop-shadow(0 0 6px #ffb703) drop-shadow(0 0 14px #ff9500)}',
-    '.rpg-gold-fallback img{filter:sepia(0.85) saturate(2.4) hue-rotate(-15deg) brightness(1.15) contrast(1.1) drop-shadow(0 0 6px #ffb703) drop-shadow(0 0 14px #ff9500)!important}',
-    '.rpg-gold{position:relative;overflow:hidden;border-radius:inherit}',
-    '.rpg-gold::before{content:"";position:absolute;left:-50%;top:0;width:60%;height:100%;background:linear-gradient(115deg,transparent 35%,rgba(255,255,255,0.55) 50%,transparent 65%);animation:rpgGoldSheen 2.6s linear infinite;pointer-events:none;mix-blend-mode:overlay}',
-    '@keyframes rpgGoldSheen{0%{transform:translateX(0)}100%{transform:translateX(280%)}}',
+    '.rpg-starter-modal .rpg-modal-inner{max-width:460px}',
+    '.rpg-starter-choices{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:6px}',
+    '.rpg-starter-card{background:#1e1e2e;border-radius:10px;padding:14px 12px;cursor:pointer;transition:transform 200ms,box-shadow 200ms,border-color 200ms;width:110px;border:1.5px solid #2a2a36}',
+    '.rpg-starter-card:hover{transform:translateY(-4px);box-shadow:0 8px 22px rgba(255,209,102,0.35);border-color:#ffd166}',
+    '.rpg-starter-card img{width:76px;height:76px;object-fit:cover;border-radius:8px;display:block;margin:0 auto}',
+    '.rpg-starter-card .n{font-size:13px;font-weight:700;margin-top:8px;text-align:center;color:#ffd166}',
+    '.rpg-starter-card .r{font-size:10px;color:#aaa;text-align:center;margin-top:2px;letter-spacing:0.5px;text-transform:uppercase}',
+    // ── Hollow variant (silvery reflective chrome) ──────────────
+    '.rpg-hollow img{filter:brightness(1.22) contrast(1.15) saturate(0.65) drop-shadow(0 0 6px #dbeafe) drop-shadow(0 0 14px #94a3b8)}',
+    '.rpg-hollow-fallback img{filter:grayscale(0.65) brightness(1.3) contrast(1.2) saturate(0.5) hue-rotate(180deg) drop-shadow(0 0 6px #e0e7ff) drop-shadow(0 0 14px #94a3b8)!important}',
+    '.rpg-hollow{position:relative;overflow:hidden;border-radius:inherit}',
+    '.rpg-hollow::before{content:"";position:absolute;left:-60%;top:0;width:85%;height:100%;background:linear-gradient(115deg,transparent 20%,rgba(255,255,255,0.35) 38%,rgba(219,234,254,0.7) 50%,rgba(255,255,255,0.35) 62%,transparent 80%);animation:rpgHollowSheen 2.2s linear infinite;pointer-events:none;mix-blend-mode:overlay}',
+    '.rpg-hollow::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(160deg,rgba(226,232,240,0.15) 0%,transparent 40%,transparent 60%,rgba(148,163,184,0.15) 100%);border-radius:inherit}',
+    '@keyframes rpgHollowSheen{0%{transform:translateX(0)}100%{transform:translateX(220%)}}',
     // ── Rainbow variant (hue rotate + colored sparkles) ──────────
     '.rpg-rainbow img{animation:rpgRainbowHue 3.5s linear infinite;filter:saturate(1.4) drop-shadow(0 0 6px #ff00e6) drop-shadow(0 0 14px #00e6ff)}',
     '.rpg-rainbow-fallback img{animation:rpgRainbowHue 3.5s linear infinite;filter:saturate(1.8) contrast(1.05) drop-shadow(0 0 6px #ff00e6) drop-shadow(0 0 14px #00e6ff)!important}',
@@ -562,26 +614,21 @@
     // ── Unified wild pulse (any special variant) ─────────────────
     '.rpg-wild-special img{animation:rpgWildPulse 900ms ease-in-out infinite alternate}',
     // ── Dex layout with variant badges ───────────────────────────
-    '.rpg-dex-row{display:flex;gap:10px;align-items:center;margin-bottom:10px;padding:8px 10px;background:#1e1e2e;border-radius:8px}',
-    '.rpg-dex-main{display:flex;gap:10px;align-items:center;flex:1;min-width:0}',
-    '.rpg-dex-main img{width:52px;height:52px;object-fit:cover;border-radius:6px;flex-shrink:0}',
-    '.rpg-dex-info{min-width:0}',
-    '.rpg-dex-info .n{font-size:12px;font-weight:600}',
-    '.rpg-dex-info .c{font-size:10px;color:#aaa;margin-top:2px}',
-    '.rpg-dex-badges{display:flex;gap:6px;flex-shrink:0}',
-    '.rpg-dex-badge{width:44px;height:44px;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#151520;border:1.5px solid #2a2a36;filter:grayscale(0.9) opacity(0.55);transition:all 200ms}',
-    '.rpg-dex-badge .sym{font-size:16px;font-weight:900;line-height:1;color:#666}',
-    '.rpg-dex-badge .cnt{font-size:10px;color:#666;margin-top:2px;font-weight:700}',
-    '.rpg-dex-badge.owned{filter:none;opacity:1}',
-    '.rpg-dex-badge-shiny.owned{background:radial-gradient(circle at 50% 40%,#fef3c7,#facc15);border-color:#eab308;box-shadow:0 0 8px rgba(250,204,21,0.4)}',
-    '.rpg-dex-badge-shiny.owned .sym,.rpg-dex-badge-shiny.owned .cnt{color:#78350f}',
-    '.rpg-dex-badge-gold.owned{background:linear-gradient(135deg,#fde68a,#f59e0b,#b45309);border-color:#78350f;box-shadow:0 0 10px rgba(245,158,11,0.5)}',
-    '.rpg-dex-badge-gold.owned .sym,.rpg-dex-badge-gold.owned .cnt{color:#451a03}',
-    '.rpg-dex-badge-rainbow.owned{background:conic-gradient(from 0deg,#ff5555,#ffaa00,#ffff55,#55ff77,#55ccff,#aa66ff,#ff66cc,#ff5555);border-color:#fff;box-shadow:0 0 12px rgba(255,255,255,0.5),0 0 20px rgba(255,105,180,0.6);animation:rpgRainbowBadge 3s linear infinite}',
+    '.rpg-dex-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:8px;padding:4px}',
+    '.rpg-dex-card{background:#1e1e2e;border-radius:8px;padding:8px 6px 6px;text-align:center;border:1.5px solid #2a2a36;position:relative;transition:border-color 150ms}',
+    '.rpg-dex-card:hover{border-color:#3b3b48}',
+    '.rpg-dex-card-badges{display:flex;justify-content:center;gap:5px;margin-bottom:6px;height:12px}',
+    '.rpg-dex-mini{width:10px;height:10px;transform:rotate(45deg);background:#2a2a36;border:1px solid #3a3a4a;transition:all 250ms;flex-shrink:0}',
+    '.rpg-dex-mini.owned{background:#facc15;border-color:#eab308}',
+    '.rpg-dex-mini-shiny.owned{background:radial-gradient(circle at 30% 30%,#fef3c7,#facc15,#eab308);border-color:#eab308;box-shadow:0 0 4px rgba(250,204,21,0.6)}',
+    '.rpg-dex-mini-hollow.owned{background:linear-gradient(135deg,#f8fafc 0%,#cbd5e1 50%,#94a3b8 100%);border-color:#64748b;box-shadow:0 0 4px rgba(226,232,240,0.7)}',
+    '.rpg-dex-mini-rainbow.owned{background:conic-gradient(from 0deg,#ff5555,#ffaa00,#ffff55,#55ff77,#55ccff,#aa66ff,#ff66cc,#ff5555);border-color:#fff;box-shadow:0 0 4px rgba(255,255,255,0.6),0 0 8px rgba(255,105,180,0.5);animation:rpgRainbowBadge 3s linear infinite}',
     '@keyframes rpgRainbowBadge{0%{filter:hue-rotate(0deg)}100%{filter:hue-rotate(360deg)}}',
-    '.rpg-dex-badge-rainbow.owned .sym,.rpg-dex-badge-rainbow.owned .cnt{color:#000;text-shadow:0 0 4px #fff}',
-    '.rpg-dex-silhouette img{filter:brightness(0) opacity(0.4)}',
-    '.rpg-dex-silhouette .n{color:#555}',
+    '.rpg-dex-card img{width:56px;height:56px;object-fit:cover;border-radius:6px;display:block;margin:0 auto}',
+    '.rpg-dex-card .n{font-size:11px;font-weight:600;margin-top:5px;line-height:1.2;color:#eee}',
+    '.rpg-dex-card .c{font-size:9px;color:#aaa;margin-top:2px;line-height:1.2}',
+    '.rpg-dex-card.rpg-dex-silhouette img{filter:brightness(0) opacity(0.35)}',
+    '.rpg-dex-card.rpg-dex-silhouette .n{color:#555}',
     // ── Catch celebration effects ────────────────────────────────
     '.rpg-particle{position:fixed;width:8px;height:8px;border-radius:50%;pointer-events:none;z-index:2147483500;box-shadow:0 0 4px currentColor;transform:translate(-50%,-50%);animation-name:rpgParticleFly;animation-timing-function:cubic-bezier(0.15,0.7,0.4,1);animation-fill-mode:forwards}',
     '@keyframes rpgParticleFly{0%{transform:translate(-50%,-50%) scale(1);opacity:1}70%{opacity:0.9}100%{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(0.2);opacity:0}}',
@@ -801,7 +848,7 @@
           spawnRoamerAt(targetSlot);
         }
       });
-      emptyItem.appendChild($('div', { html: '\u2205', style: { fontSize: '32px', color: '#555', height: '52px', display: 'flex', alignItems: 'center', justifyContent: 'center' } }));
+      emptyItem.appendChild($('div', { html: '\u2715', style: { fontSize: '28px', color: '#555', height: '52px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '300' } }));
       emptyItem.appendChild($('div', { class: 'n', html: 'Empty' }));
       emptyItem.appendChild($('div', { class: 'l', html: '\u2014' }));
       grid.appendChild(emptyItem);
@@ -825,6 +872,27 @@
             respawnAllRoamers();
           }
         });
+        // Delete button — release this pet forever
+        const delBtn = $('div', {
+          class: 'rpg-menu-del',
+          html: '\u00D7',
+          title: 'Release ' + p.name,
+          onclick: (e) => {
+            e.stopPropagation();
+            const labelName = (v !== 'normal' ? variantLabel(v) + ' ' : '') + p.name;
+            if (!confirm('Release ' + labelName + '? This cannot be undone.')) return;
+            state.collection = state.collection.filter(x => x.instanceId !== inst.instanceId);
+            for (let s = 0; s < state.equip.petInstanceIds.length; s++) {
+              if (state.equip.petInstanceIds[s] === inst.instanceId) state.equip.petInstanceIds[s] = null;
+            }
+            persistCollection(); persistEquip();
+            closeMenu();
+            renderPanel();
+            respawnAllRoamers();
+            openMenu('pet', targetSlot);
+          }
+        });
+        item.appendChild(delBtn);
         item.appendChild($('img', { src: petImg(p, v) }));
         item.appendChild($('div', { class: 'n', html: (variantBadge(v) ? variantBadge(v) + ' ' : '') + p.name }));
         item.appendChild($('div', { class: 'l', html: (v !== 'normal' ? variantLabel(v) + ' \u00B7 ' : '') + p.rarity }));
@@ -845,35 +913,31 @@
     const m = $('div', { class: 'rpg-modal', onclick: (e) => { if (e.target === m) m.remove(); } });
     const inner = $('div', { class: 'rpg-modal-inner rpg-dex' });
     inner.appendChild($('h3', { html: 'PET DEX', style: { margin: '0 0 12px', color: 'gold' } }));
-    const list = $('div', { class: 'rpg-dex-list' });
+    const grid = $('div', { class: 'rpg-dex-grid' });
     for (const p of PETS) {
       const nCount = state.collection.filter(i => i.petId === p.id && variantOf(i) === 'normal').length;
-      const row = $('div', { class: 'rpg-dex-row' });
-
-      const nc = $('div', { class: 'rpg-dex-main' + (nCount === 0 ? ' rpg-dex-silhouette' : '') });
-      nc.appendChild($('img', { src: p.img }));
-      const info = $('div', { class: 'rpg-dex-info' });
-      info.appendChild($('div', { class: 'n', html: nCount > 0 ? p.name : '???' }));
-      info.appendChild($('div', { class: 'c', html: nCount > 0 ? ('\u00D7' + nCount + ' \u00B7 ' + p.rarity) : '\u2014' }));
-      nc.appendChild(info);
-      row.appendChild(nc);
-
-      const badges = $('div', { class: 'rpg-dex-badges' });
-      for (const vk of ['shiny', 'gold', 'rainbow']) {
+      const owned = nCount > 0;
+      const card = $('div', { class: 'rpg-dex-card' + (owned ? '' : ' rpg-dex-silhouette') });
+      // Top row: three small diamond badges (shiny / hollow / rainbow)
+      const badgeRow = $('div', { class: 'rpg-dex-card-badges' });
+      for (const vk of ['shiny', 'hollow', 'rainbow']) {
         const count = state.collection.filter(i => i.petId === p.id && variantOf(i) === vk).length;
-        const owned = count > 0;
-        const badge = $('div', {
-          class: 'rpg-dex-badge rpg-dex-badge-' + vk + (owned ? ' owned' : ''),
-          title: owned ? (variantLabel(vk) + ': ' + count + ' caught') : (variantLabel(vk) + ': not yet caught')
+        const isOwned = count > 0;
+        const mini = $('div', {
+          class: 'rpg-dex-mini rpg-dex-mini-' + vk + (isOwned ? ' owned' : ''),
+          title: isOwned ? (variantLabel(vk) + ': ' + count + ' caught') : (variantLabel(vk) + ': not yet caught')
         });
-        badge.appendChild($('div', { class: 'sym', html: variantBadge(vk) }));
-        badge.appendChild($('div', { class: 'cnt', html: owned ? ('\u00D7' + count) : '?' }));
-        badges.appendChild(badge);
+        badgeRow.appendChild(mini);
       }
-      row.appendChild(badges);
-      list.appendChild(row);
+      card.appendChild(badgeRow);
+      // Middle: image
+      card.appendChild($('img', { src: p.img }));
+      // Bottom: name + rarity/count
+      card.appendChild($('div', { class: 'n', html: owned ? p.name : '???' }));
+      card.appendChild($('div', { class: 'c', html: owned ? ('\u00D7' + nCount + ' \u00B7 ' + p.rarity) : '\u2014' }));
+      grid.appendChild(card);
     }
-    inner.appendChild(list);
+    inner.appendChild(grid);
     inner.appendChild($('button', { html: 'Close', onclick: () => m.remove() }));
     m.appendChild(inner);
     document.body.appendChild(m);
@@ -914,12 +978,13 @@
       notes.forEach((f, i) => beep(f, 0.25, i * 0.08, 0.09, 'triangle'));
       return;
     }
-    if (variant === 'gold') {
-      // Brass-y fanfare
-      beep(523, 0.15, 0.00, 0.10, 'square');
-      beep(659, 0.15, 0.12, 0.10, 'square');
-      beep(784, 0.15, 0.24, 0.10, 'square');
-      beep(1047, 0.35, 0.36, 0.12, 'square');
+    if (variant === 'hollow') {
+      // Crystal bells — high triangle-wave arpeggio with a soft trailing chime
+      beep(880,  0.20, 0.00, 0.09, 'triangle');
+      beep(1319, 0.20, 0.12, 0.09, 'triangle');
+      beep(1760, 0.22, 0.24, 0.09, 'triangle');
+      beep(2093, 0.45, 0.38, 0.10, 'triangle');
+      beep(1319, 0.35, 0.50, 0.06, 'sine');  // gentle echo
       return;
     }
     if (variant === 'shiny') {
@@ -993,12 +1058,12 @@
         'radial-gradient(circle at 50% 40%, #fef3c7, #facc15 70%, #eab308)', '#78350f', 1600);
       return 1400;
     }
-    if (variant === 'gold') {
-      spawnParticles(x, y, 50, ['#fde68a','#f59e0b','#b45309','#fff','#ffd700'], 1700, 300);
-      flashScreen('rgba(245,158,11,0.35)', 500);
-      showCelebrationBanner('&#9670; GOLD! &#9670;',
-        'linear-gradient(135deg, #fde68a, #f59e0b, #b45309)', '#451a03', 2000);
-      return 1800;
+    if (variant === 'hollow') {
+      spawnParticles(x, y, 42, ['#f8fafc','#e2e8f0','#cbd5e1','#94a3b8','#dbeafe','#fff'], 1600, 280);
+      flashScreen('rgba(226,232,240,0.32)', 480);
+      showCelebrationBanner('&#9670; HOLLOW! &#9670;',
+        'linear-gradient(135deg, #f8fafc 0%, #cbd5e1 30%, #94a3b8 55%, #cbd5e1 80%, #f1f5f9 100%)', '#1e293b', 1900);
+      return 1700;
     }
     if (variant === 'rainbow') {
       spawnParticles(x, y, 100, ['#ff5555','#ffaa00','#ffff55','#55ff77','#55ccff','#aa66ff','#ff66cc','#fff'], 2200, 380);
@@ -1022,12 +1087,34 @@
     setTimeout(() => toast.remove(), 1500);
   };
 
+  const playXPGainSound = () => {
+    beep(880,  0.09, 0.00, 0.05, 'sine');
+    beep(1319, 0.16, 0.07, 0.06, 'sine');
+  };
+  const flashXPGain = (amount) => {
+    if (!el.stats || !el.bar) return;
+    const t = document.createElement('div');
+    t.className = 'rpg-xp-gain';
+    t.textContent = '+' + amount + ' XP';
+    el.stats.appendChild(t);
+    setTimeout(() => t.remove(), 1300);
+    // Bar pulse — remove any lingering class to allow retriggering
+    el.bar.classList.remove('rpg-bar-pulse');
+    void el.bar.offsetWidth;
+    el.bar.classList.add('rpg-bar-pulse');
+    setTimeout(() => el.bar && el.bar.classList.remove('rpg-bar-pulse'), 500);
+    playXPGainSound();
+  };
   const grantPlayerXP = (amount, reason) => {
     if (!amount) return;
+    // Refresh player from storage first to pick up any changes from other tabs
+    // that arrived between the last listener event and now.
+    state.player = load(K.player, state.player);
     state.player.xp += amount;
     let leveled = false;
     while (state.player.xp >= xpToNextLevel(state.player.level)) { state.player.xp -= xpToNextLevel(state.player.level); state.player.level++; leveled = true; }
     persistPlayer(); renderPanel();
+    flashXPGain(amount);
     if (leveled) { flashLevelUp(el.charSlot, 'LEVEL UP! ' + state.player.level); respawnAllRoamers(); }
     console.log('[APM RPG] +' + amount + ' XP (' + reason + ')');
   };
@@ -1035,7 +1122,7 @@
   // ================================================================
   // ACTION DETECTION
   // ================================================================
-  const cooldown = { complete: 0, create: 0, submit: 0 };
+  const cooldown = { complete: 0 };
   const canFire = (k, ms) => { ms = ms || 1500; const now = Date.now(); if (now - cooldown[k] < ms) return false; cooldown[k] = now; return true; };
   const textOf = (n) => ((n && (n.textContent || n.value || (n.getAttribute && n.getAttribute('aria-label')))) || '').trim().toLowerCase();
 
@@ -1044,8 +1131,6 @@
     for (let i = 0; i < 6 && n && n !== document.body; i++, n = n.parentElement) {
       const t = textOf(n); if (!t) continue;
       if (/\bcomplete\b/.test(t) && !/incomplete/.test(t) && canFire('complete')) { grantPlayerXP(XP_REWARDS.completeWorkOrder, 'complete WO'); return; }
-      if (/^(create|new)\b/.test(t) && canFire('create')) { grantPlayerXP(XP_REWARDS.createWorkOrder, 'create WO'); return; }
-      if (isPTPHost() && /^submit\b/.test(t) && canFire('submit')) { grantPlayerXP(XP_REWARDS.submitPTP, 'submit PTP'); return; }
     }
   }, true);
 
@@ -1198,20 +1283,62 @@
   }
 
   const rollWildSpawn = () => { if (!wildEl && Math.random() < WILD_SPAWN_CHANCE) spawnWild(); };
-  // Roll on SPA navigation
-  window.addEventListener('hashchange', () => setTimeout(rollWildSpawn, 500));
-  window.addEventListener('popstate', () => setTimeout(rollWildSpawn, 500));
+  const onPageChange = () => {
+    setTimeout(rollWildSpawn, 500);
+    if (Math.random() < PAGE_CHANGE_XP_CHANCE) {
+      grantPlayerXP(XP_REWARDS.pageChange, 'page change');
+    }
+  };
+  window.addEventListener('hashchange', onPageChange);
+  window.addEventListener('popstate', onPageChange);
 
   // ================================================================
   // BOOT
   // ================================================================
+  const showStarterModal = () => {
+    // Don't stack if one is already open
+    if (document.querySelector('.rpg-starter-modal')) return;
+    const modal = $('div', { class: 'rpg-modal rpg-starter-modal' });
+    const inner = $('div', { class: 'rpg-modal-inner rpg-starter-inner' });
+    inner.appendChild($('h3', { html: 'CHOOSE YOUR STARTER', style: { margin: '0 0 4px', color: '#ffd166' } }));
+    inner.appendChild($('div', { html: 'Pick one pet to begin your journey. You can catch the others in the wild.', style: { fontSize: '12px', color: '#aaa', marginBottom: '16px' } }));
+    const choices = $('div', { class: 'rpg-starter-choices' });
+    for (const p of PETS.slice(0, 3)) {
+      const card = $('div', {
+        class: 'rpg-starter-card',
+        title: p.rarity + ' \u00B7 base catch ' + Math.round((p.catchBaseRate || 0) * 100) + '%',
+        onclick: () => {
+          const inst = { instanceId: 'starter_' + Date.now(), petId: p.id, variant: 'normal', caughtAt: Date.now() };
+          state.collection.push(inst);
+          state.equip.petInstanceIds[0] = inst.instanceId;
+          persistCollection(); persistEquip(); writeRaw(K.starter, '1');
+          modal.remove();
+          renderPanel();
+          respawnAllRoamers();
+        }
+      });
+      card.appendChild($('img', { src: p.img }));
+      card.appendChild($('div', { class: 'n', html: p.name }));
+      card.appendChild($('div', { class: 'r', html: p.rarity }));
+      choices.appendChild(card);
+    }
+    inner.appendChild(choices);
+    modal.appendChild(inner);
+    document.body.appendChild(modal);
+  };
+
   const boot = () => {
     console.log('[APM RPG] v' + LOCAL_VERSION + ' loaded');
+    setupMultiTabSync();
     loadUpdateCache();
     buildPanel(); renderPanel();
     respawnAllRoamers();
     // Roll a wild spawn shortly after load
     setTimeout(rollWildSpawn, 1500);
+    // Starter pet choice for new users
+    if (!readRaw(K.starter) && state.collection.length === 0 && PETS.length > 0) {
+      setTimeout(showStarterModal, 800);
+    }
     // Poll the hosted script for a newer version (respects 1h cache)
     setTimeout(() => checkForUpdate(false), 3000);
     if (!state.player.username) {
@@ -1232,7 +1359,7 @@
     grantXP: (n) => grantPlayerXP(n || 50, 'debug'),
     setLevel: (lvl) => { state.player.level = Math.max(1, lvl|0); state.player.xp = 0; persistPlayer(); renderPanel(); respawnAllRoamers(); },
     spawn: () => spawnWild(),
-    spawnVariant: (v) => { const orig = Math.random; Math.random = (() => { let n = 0; return () => n++ === 0 ? 0 : orig(); })(); const targetChance = { rainbow: 0, gold: VARIANT_META.rainbow.chance, shiny: VARIANT_META.rainbow.chance + VARIANT_META.gold.chance }[v]; Math.random = (() => { let n = 0; return () => n++ === 0 ? (targetChance !== undefined ? targetChance : 0.99) : orig(); })(); spawnWild(); Math.random = orig; },
+    spawnVariant: (v) => { const orig = Math.random; Math.random = (() => { let n = 0; return () => n++ === 0 ? 0 : orig(); })(); const targetChance = { rainbow: 0, hollow: VARIANT_META.rainbow.chance, shiny: VARIANT_META.rainbow.chance + VARIANT_META.hollow.chance }[v]; Math.random = (() => { let n = 0; return () => n++ === 0 ? (targetChance !== undefined ? targetChance : 0.99) : orig(); })(); spawnWild(); Math.random = orig; },
     rollSpawn: () => rollWildSpawn(),
     despawn: despawnWild,
     detect: () => { const raw = detectUsername(); const norm = normalizeAlias(raw); console.log('raw:', raw, '-> alias:', norm); return norm; },
