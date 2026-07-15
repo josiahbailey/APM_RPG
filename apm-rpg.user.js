@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.7.20
+// @version      0.7.21
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -1022,8 +1022,14 @@
           onclick: () => {
             if (!unlocked) return;
             state.equip.bannerId = b.id; persistEquip(); renderPanel();
+            // Refresh the .active class across the whole slider so the gold
+            // outline moves with the current selection (including bn_none).
+            bannerRow.querySelectorAll('.rpg-menu-banner').forEach((el2) => {
+              el2.classList.toggle('active', el2.dataset.bannerId === state.equip.bannerId);
+            });
           }
         });
+        tile.dataset.bannerId = b.id;
         if (b.img) tile.style.backgroundImage = 'url("' + b.img + '")';
         else tile.classList.add('rpg-menu-banner-none');
         if (!unlocked) {
