@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.6.3
+// @version      0.6.4
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -548,7 +548,8 @@
     '.rpg-levelup-anim{animation:rpgLevelUp 900ms ease-out}',
     '.rpg-levelup-toast{position:fixed;left:50%;top:30%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.85);color:gold;font-size:22px;font-weight:800;padding:12px 20px;border-radius:10px;border:2px solid gold;z-index:2147483200;pointer-events:none;animation:rpgLevelUp 1200ms ease-out}',
     '.rpg-modal{position:fixed;inset:0;z-index:2147483400;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center}',
-    '.rpg-modal-inner{background:#1a1a24;color:#eee;padding:22px 26px;border-radius:12px;border:2px solid gold;text-align:center;max-width:340px}',
+    '.rpg-modal-inner{background:#1a1a24;color:#eee;padding:22px 26px;border-radius:12px;border:2px solid gold;text-align:center;max-width:340px;position:relative}',
+    '.rpg-modal-close{position:absolute;top:10px;right:10px;width:26px;height:26px;border-radius:50%;background:rgba(120,120,140,0.18);color:#bbb;font-size:16px;font-weight:900;display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;line-height:1;z-index:5;padding:0;margin:0;transition:background 150ms,color 150ms,transform 150ms}.rpg-modal-close:hover{background:#dc2626;color:#fff;transform:scale(1.1)}',
     '.rpg-modal-inner button{margin-top:14px;padding:8px 16px;background:gold;color:#111;border:none;border-radius:6px;font-weight:700;cursor:pointer}',
     '.rpg-shiny{position:relative}.rpg-shiny img{filter:drop-shadow(0 0 6px gold) drop-shadow(0 0 12px #fff59d)}',
     '.rpg-shiny-fallback img{filter:hue-rotate(160deg) saturate(1.6) contrast(1.05) drop-shadow(0 0 6px gold) drop-shadow(0 0 12px #fff59d)!important}',
@@ -683,7 +684,13 @@
     el.updateBtn = $('button', {
       class: 'rpg-update-toast',
       title: 'A new version is available. Click to install.',
-      onclick: () => { if (UPDATE_DOWNLOAD_URL && UPDATE_DOWNLOAD_URL.indexOf('REPLACE_ME') === -1) window.open(UPDATE_DOWNLOAD_URL, '_blank'); }
+      onclick: () => {
+        if (UPDATE_DOWNLOAD_URL && UPDATE_DOWNLOAD_URL.indexOf('REPLACE_ME') === -1) {
+          window.open(UPDATE_DOWNLOAD_URL, '_blank');
+          // Close this tab so a fresh page load picks up the new version after install
+          setTimeout(() => { try { window.close(); } catch (e) {} }, 200);
+        }
+      }
     });
     el.updateBtn.style.display = 'none';
     root.appendChild(el.updateBtn);
@@ -938,7 +945,12 @@
       grid.appendChild(card);
     }
     inner.appendChild(grid);
-    inner.appendChild($('button', { html: 'Close', onclick: () => m.remove() }));
+    inner.appendChild($('button', {
+      class: 'rpg-modal-close',
+      html: '\u00D7',
+      title: 'Close',
+      onclick: (e) => { e.stopPropagation(); m.remove(); }
+    }));
     m.appendChild(inner);
     document.body.appendChild(m);
   };
