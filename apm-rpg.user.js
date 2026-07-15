@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.7.35
+// @version      0.7.36
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -680,7 +680,7 @@
     '.rpg-root,.rpg-root *{box-sizing:border-box;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}',
     '.rpg-panel-wrap{position:fixed;right:16px;bottom:16px;z-index:2147483000;display:flex;align-items:stretch;transition:transform 320ms cubic-bezier(0.4,0,0.2,1)}',
     '.rpg-panel-wrap.rpg-collapsed{transform:translateX(calc(100% - 26px))}',
-    '.rpg-panel-tab{width:26px;align-self:stretch;margin:6px -6px 6px 0;background:rgba(20,20,28,0.85);color:#ffd166;border:1px solid #3b3b48;border-right:none;border-radius:8px 0 0 8px;cursor:pointer;writing-mode:vertical-rl;text-orientation:mixed;display:flex;align-items:center;justify-content:center;font-weight:800;letter-spacing:3px;font-size:12px;user-select:none;transition:background 150ms,color 150ms;backdrop-filter:blur(2px);box-shadow:-3px 0 8px rgba(0,0,0,0.3)}',
+    '.rpg-panel-tab{width:26px;align-self:stretch;margin-right:-6px;background:rgba(20,20,28,0.85);color:#ffd166;border:1px solid #3b3b48;border-right:none;border-radius:8px 0 0 8px;cursor:pointer;writing-mode:vertical-rl;text-orientation:mixed;display:flex;align-items:center;justify-content:center;font-weight:800;letter-spacing:3px;font-size:12px;user-select:none;transition:background 150ms,color 150ms;backdrop-filter:blur(2px);box-shadow:-3px 0 8px rgba(0,0,0,0.3)}',
     '.rpg-panel-tab:hover{background:rgba(40,40,55,0.95);color:#fff}',
     '.rpg-panel{position:relative;background:rgba(20,20,28,0.45);color:#eee;border:1px solid #3b3b48;border-radius:12px;padding:10px;display:flex;gap:10px;align-items:center;box-shadow:0 8px 24px rgba(0,0,0,0.5);backdrop-filter:blur(2px);user-select:none}',
     '.rpg-slot-container{display:flex;align-items:center;flex-shrink:0}',
