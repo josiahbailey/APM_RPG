@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.6.2
+// @version      0.6.3
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -536,7 +536,7 @@
     '.rpg-menu-item .n{font-size:11px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
     '.rpg-menu-item .l{font-size:10px;color:#ffd166}',
     '.rpg-empty-msg{font-size:12px;color:#888;padding:12px 0}',
-    '.rpg-dex{max-width:520px;text-align:left}',
+    '.rpg-dex{max-width:360px;text-align:left}',
     '.rpg-dex-list{max-height:55vh;overflow-y:auto}',
     '.rpg-roam{position:fixed;z-index:2147482900;pointer-events:none;transition:left 10s linear,top 10s linear}',
     '.rpg-roam img{width:64px;height:64px;object-fit:contain;filter:drop-shadow(0 4px 6px rgba(0,0,0,0.4))}',
@@ -614,7 +614,7 @@
     // ── Unified wild pulse (any special variant) ─────────────────
     '.rpg-wild-special img{animation:rpgWildPulse 900ms ease-in-out infinite alternate}',
     // ── Dex layout with variant badges ───────────────────────────
-    '.rpg-dex-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(112px,1fr));gap:8px;padding:4px}',
+    '.rpg-dex-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;padding:4px;max-height:60vh;overflow-y:auto}',
     '.rpg-dex-card{background:#1e1e2e;border-radius:8px;padding:8px 6px 6px;text-align:center;border:1.5px solid #2a2a36;position:relative;transition:border-color 150ms}',
     '.rpg-dex-card:hover{border-color:#3b3b48}',
     '.rpg-dex-card-badges{display:flex;justify-content:center;gap:5px;margin-bottom:6px;height:12px}',
