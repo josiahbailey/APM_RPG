@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.7.9
+// @version      0.7.11
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -1418,16 +1418,18 @@
   // Math.random picks a spot near the current one.
   // ================================================================
   const QUADRANT_INNER_R = 260;
-  const QUADRANT_OUTER_FRAC = 0.6;
+  const QUADRANT_OUTER_FRAC = 0.78;
+  const QUADRANT_CENTER_Y_OFFSET = 200;  // shift arc center below the viewport bottom -> pets stay lower
   const pickQuadrantPoint = (spriteW, spriteH, curX, curY, minMoveDist) => {
     const W = window.innerWidth, H = window.innerHeight;
+    const centerY = H + QUADRANT_CENTER_Y_OFFSET;
     const outerR = Math.max(QUADRANT_INNER_R + 120, Math.min(W, H) * QUADRANT_OUTER_FRAC);
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
     const generate = () => {
       const angle = Math.random() * (Math.PI / 2);           // 0 = west, π/2 = north
       const radius = QUADRANT_INNER_R + Math.random() * (outerR - QUADRANT_INNER_R);
       const cx = W - Math.cos(angle) * radius;               // sprite CENTER x
-      const cy = H - Math.sin(angle) * radius;               // sprite CENTER y
+      const cy = centerY - Math.sin(angle) * radius;         // sprite CENTER y (arc center shifted down)
       return {
         x: clamp(cx - spriteW / 2, 0, Math.max(0, W - spriteW)),
         y: clamp(cy - spriteH / 2, 0, Math.max(0, H - spriteH)),
