@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.7.26
+// @version      0.7.27
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -1339,14 +1339,29 @@
   // Inspect with APM_RPG.debugDetection() from the devtools console.
   const RPG_URL_LOG_MAX = 60;
   const rpgUrlLog = [];       // [{ src, url, matched, ts }]
-  let rpgVerbose = false;
+  // Verbose defaults ON so devtools shows every URL that passes through the
+  // hooks — this is a temporary diagnostic aid while XP detection is being
+  // tuned. Switch off with `window.__apmRpgVerbose = false` in the console.
   const rpgLogUrl = (src, url, matched) => {
     try {
       rpgUrlLog.push({ src: src, url: url, matched: matched, ts: Date.now() });
       if (rpgUrlLog.length > RPG_URL_LOG_MAX) rpgUrlLog.shift();
-      if (rpgVerbose) console.log('[APM RPG url]', src, matched || '(no match)', url);
+      const verbose = (rpgRawWin.__apmRpgVerbose !== false);   // default ON
+      if (verbose) {
+        if (matched) console.log('%c[APM RPG url]', 'color:#22c55e;font-weight:bold', src, matched, url);
+        else         console.log('[APM RPG url]', src, '(no match)', url);
+      } else if (matched) {
+        console.log('%c[APM RPG url]', 'color:#22c55e;font-weight:bold', src, matched, url);
+      }
     } catch (e) {}
   };
+  // Expose the log directly on the page window so it's inspectable without the
+  // bridge — the bridge is only reliable when the sandbox is fully healthy.
+  try {
+    if (typeof unsafeWindow !== 'undefined' && unsafeWindow) {
+      unsafeWindow.__apmRpgUrls = rpgUrlLog;
+    }
+  } catch (e) {}
 
   const handleNavActivity = (source) => {
     if (!canFire('nav', NAV_COOLDOWN_MS)) return;
@@ -1496,7 +1511,47 @@
     installXHRHook();
     installFetchHook();
     installHistoryHook();
-    console.log('[APM RPG] action detection wired');
+    // Loud startup dump so it's obvious in devtools that everything is armed.
+    const rawXHRProto = rpgRawWin.XMLHttpRequest && rpgRawWin.XMLHttpRequest.prototype;
+    console.log('%c[APM RPG] action detection wired', 'color:#22c55e;font-weight:bold', {
+      frame: {
+        isTop: (function(){ try { return window === window.top; } catch (e) { return null; } })(),
+        hostname: (function(){ try { return location.hostname; } catch (e) { return null; } })(),
+      },
+      hooks: {
+        xhrHooked: !!(rawXHRProto && rawXHRProto.__apmRpgHooked),
+        fetchHooked: !!rpgRawWin.__apmRpgFetchHooked,
+        historyHooked: !!rpgRawWin.__apmRpgHistoryHooked,
+      },
+      patterns: {
+        PTP_START: PTP_START_URL_RE.source,
+        EAM_API:   EAM_API_URL_RE.source,
+      },
+      tip: 'Every URL that flows through XHR/fetch is now logged. Look for green [APM RPG url] lines. Turn off with window.__apmRpgVerbose = false.',
+    });
+    // Also expose a diagnostic snapshot on the page window (no bridge needed).
+    try {
+      if (typeof unsafeWindow !== 'undefined' && unsafeWindow) {
+        unsafeWindow.__apmRpgDebug = () => ({
+          version: LOCAL_VERSION,
+          frame: {
+            isTop: (function(){ try { return window === window.top; } catch (e) { return null; } })(),
+            hostname: (function(){ try { return location.hostname; } catch (e) { return null; } })(),
+          },
+          hooks: {
+            xhrHooked: !!(rawXHRProto && rawXHRProto.__apmRpgHooked),
+            fetchHooked: !!rpgRawWin.__apmRpgFetchHooked,
+            historyHooked: !!rpgRawWin.__apmRpgHistoryHooked,
+          },
+          cooldowns: {
+            complete: cooldown.complete ? new Date(cooldown.complete).toISOString() : 'never',
+            ptp: cooldown.ptp ? new Date(cooldown.ptp).toISOString() : 'never',
+            nav: cooldown.nav ? new Date(cooldown.nav).toISOString() : 'never',
+          },
+          urls: rpgUrlLog.slice().reverse(),
+        });
+      }
+    } catch (e) {}
   };
 
   // ================================================================
