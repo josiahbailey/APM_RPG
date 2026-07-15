@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.6.7
+// @version      0.6.8
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -78,6 +78,7 @@
   const UPDATE_META_URL     = 'https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/apm-rpg.user.js';
   const UPDATE_DOWNLOAD_URL = 'https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/apm-rpg.user.js';
   const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;  // 5 minutes (rate limit; force=true bypasses)
+  const UPDATE_POLL_INTERVAL_MS  = 60 * 1000;      // how often to *try* checks (each try respects the rate limit)
   const UPDATE_CACHE_KEY    = 'apm_rpg_update_v1';
   // Variant rarities. Each spawn independently rolls for the rarest tier down.
   // 'normal' is the fallthrough — all four are catch-rate multipliers over base.
@@ -223,14 +224,20 @@
     try {
       const stored = readRaw(K.installedVersion);
       const parsed = stored ? JSON.parse(stored) : null;
+      const prev = updateInfo.newerLocalVersion;
       if (!parsed || cmpVersion(LOCAL_VERSION, parsed) > 0) {
         save(K.installedVersion, LOCAL_VERSION);
-        updateInfo.newerLocalVersion = null;  // we are the newest
+        updateInfo.newerLocalVersion = null;
       } else if (cmpVersion(parsed, LOCAL_VERSION) > 0) {
         updateInfo.newerLocalVersion = parsed;
-        console.log('[APM RPG] a newer version (' + parsed + ') is installed; reload to activate');
+        if (prev !== parsed) {
+          console.log('[APM RPG] a newer version (' + parsed + ') is installed; reload to activate');
+        }
       } else {
-        updateInfo.newerLocalVersion = null;  // exact match
+        updateInfo.newerLocalVersion = null;
+      }
+      if (updateInfo.newerLocalVersion !== prev && typeof renderPanel === 'function' && el && el.panel) {
+        renderPanel();
       }
     } catch (e) {}
   };
@@ -1384,6 +1391,16 @@
     document.body.appendChild(modal);
   };
 
+  // Periodic polling: try both the GitHub update fetch (rate-limited internally)
+  // and the installed-version re-check. Also runs on tab visibility change so a
+  // tab that has been idle picks up updates the moment it's focused again.
+  const startSyncPolling = () => {
+    const tick = () => { try { checkForUpdate(false); } catch (e) {} bumpInstalledVersion(); };
+    setInterval(tick, UPDATE_POLL_INTERVAL_MS);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
+    window.addEventListener('focus', tick);
+  };
+
   const boot = () => {
     console.log('[APM RPG] v' + LOCAL_VERSION + ' loaded');
     setupMultiTabSync();
@@ -1399,6 +1416,7 @@
     }
     // Poll the hosted script for a newer version (respects 1h cache)
     setTimeout(() => checkForUpdate(false), 3000);
+    startSyncPolling();
     if (!state.player.username) {
       let attempts = 0;
       const uInterval = setInterval(() => {
