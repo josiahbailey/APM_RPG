@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.7.3
+// @version      0.7.4
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -1319,6 +1319,21 @@
   }, true);
 
   // ================================================================
+  // MOVEMENT HELPER — retry random until >= minDist from current, else jump
+  // to the opposite side. Prevents "stuck against the wall" appearance when
+  // Math.random happens to pick a spot near the current one.
+  // ================================================================
+  const pickFarPoint = (curX, curY, xMin, xMax, yMin, yMax, minDist) => {
+    for (let i = 0; i < 10; i++) {
+      const nx = rand(xMin, xMax);
+      const ny = rand(yMin, yMax);
+      if (Math.hypot(nx - curX, ny - curY) >= minDist) return { x: nx, y: ny };
+    }
+    const midX = (xMin + xMax) / 2, midY = (yMin + yMax) / 2;
+    return { x: curX < midX ? xMax : xMin, y: curY < midY ? yMax : yMin };
+  };
+
+  // ================================================================
   // ROAMING PETS (up to 3, one per unlocked active slot)
   // ================================================================
   const roamers = [null, null, null];
@@ -1326,8 +1341,11 @@
   const removeAllRoamers = () => { for (let i = 0; i < roamers.length; i++) removeRoamerAt(i); };
   const moveRoamerAt = (i) => {
     const r = roamers[i]; if (!r) return;
-    r.style.left = Math.floor(rand(20, window.innerWidth - 80)) + 'px';
-    r.style.top  = Math.floor(rand(20, window.innerHeight - 80)) + 'px';
+    const curX = parseFloat(r.style.left) || 0;
+    const curY = parseFloat(r.style.top) || 0;
+    const t = pickFarPoint(curX, curY, 20, window.innerWidth - 80, 20, window.innerHeight - 80, 200);
+    r.style.left = Math.floor(t.x) + 'px';
+    r.style.top  = Math.floor(t.y) + 'px';
   };
   const spawnRoamerAt = (i) => {
     removeRoamerAt(i);
@@ -1375,8 +1393,11 @@
 
   const moveWild = () => {
     if (!wildEl) return;
-    wildEl.style.left = Math.floor(rand(40, window.innerWidth - 160)) + 'px';
-    wildEl.style.top = Math.floor(rand(40, window.innerHeight - 220)) + 'px';
+    const curX = parseFloat(wildEl.style.left) || 0;
+    const curY = parseFloat(wildEl.style.top) || 0;
+    const t = pickFarPoint(curX, curY, 40, window.innerWidth - 160, 40, window.innerHeight - 220, 260);
+    wildEl.style.left = Math.floor(t.x) + 'px';
+    wildEl.style.top  = Math.floor(t.y) + 'px';
   };
 
   const spawnWild = () => {
