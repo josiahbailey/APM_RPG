@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.7.45
+// @version      0.7.46
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -130,6 +130,19 @@
 
   const NAV_COOLDOWN_MS       = 2000;
   const PAGE_CHANGE_XP_CHANCE = 0.15;  // 15% chance to award XP on SPA nav
+
+  // Nav-only URL detection (mirrors 0.7.31 behavior). EAM's SPA rarely uses
+  // pushState/replaceState — most page transitions come through XHR calls to
+  // /web/base/<SCREEN>.xmlhttp endpoints. We classify by URL path and by
+  // resolved host so relative screen codes (USRTAB, USAGE, ...) still count.
+  const EAM_API_URL_RE   = /\/web\/base\/[A-Za-z0-9_]+\.xmlhttp/i;
+  const EAM_HEARTBEAT_RE = /(?:\/web\/base\/)?(?:SESSION|BSFOOTR|KEEPALIVE|BSTIMR|IDLTIMR)(?:\.xmlhttp)?(?:$|[?&])/i;
+  const EAM_HOST_RE      = /(?:^|\.)eam\.(?:hxgnsmartcloud\.com|aws\.a2z\.com)$/i;
+  const resolveUrl = (u) => {
+    try { return new URL(String(u || ''), (typeof location !== 'undefined' ? location.href : undefined)).href; }
+    catch (e) { return String(u || ''); }
+  };
+  const hostOf = (u) => { try { return new URL(u).hostname; } catch (e) { return ''; } };
 
 
   const xpToNextLevel = (level) => Math.floor(100 * Math.pow(level, 1.35));
@@ -1354,10 +1367,59 @@
 
   const handleNavActivity = (source) => {
     if (!canFire('nav', NAV_COOLDOWN_MS)) return;
+    console.log('[APM RPG] nav activity via', source);
     setTimeout(rollWildSpawn, 500);
     if (Math.random() < PAGE_CHANGE_XP_CHANCE) {
       grantPlayerXP(XP_REWARDS.pageChange, 'page change');
     }
+  };
+
+  // Fire handleNavActivity on any EAM-origin XHR/fetch that isn't a heartbeat.
+  // Match by both path regex and host regex (for relative screen codes).
+  const classifyUrlForNav = (url) => {
+    if (!url) return;
+    const raw = String(url);
+    if (EAM_HEARTBEAT_RE.test(raw)) return;
+    const abs = resolveUrl(raw);
+    const host = hostOf(abs);
+    if (EAM_API_URL_RE.test(abs) || EAM_HOST_RE.test(host)) {
+      handleNavActivity('eam-xhr');
+    }
+  };
+
+  const installXHRHook = () => {
+    try {
+      const proto = rpgRawWin.XMLHttpRequest && rpgRawWin.XMLHttpRequest.prototype;
+      if (!proto || proto.__apmRpgHooked) return;
+      const origOpen = proto.open;
+      const origSend = proto.send;
+      proto.open = function(method, url) {
+        try { this.__apmRpgUrl = String(url || ''); } catch (e) {}
+        return origOpen.apply(this, arguments);
+      };
+      proto.send = function() {
+        const url = this.__apmRpgUrl || '';
+        this.addEventListener('load', () => classifyUrlForNav(url), { once: true });
+        return origSend.apply(this, arguments);
+      };
+      proto.__apmRpgHooked = true;
+    } catch (e) {}
+  };
+
+  const installFetchHook = () => {
+    try {
+      if (rpgRawWin.__apmRpgFetchHooked) return;
+      const origFetch = rpgRawWin.fetch;
+      if (typeof origFetch !== 'function') return;
+      rpgRawWin.fetch = function(input) {
+        const url = (typeof input === 'string') ? input : (input && input.url) || '';
+        return origFetch.apply(this, arguments).then((resp) => {
+          if (resp && resp.ok !== false) classifyUrlForNav(url);
+          return resp;
+        }, (err) => { throw err; });
+      };
+      rpgRawWin.__apmRpgFetchHooked = true;
+    } catch (e) {}
   };
 
   const installHistoryHook = () => {
@@ -1381,8 +1443,10 @@
   window.addEventListener('hashchange', () => handleNavActivity('hashchange'));
   window.addEventListener('popstate',   () => handleNavActivity('popstate'));
 
-  // Install the history hook immediately at document-start so we intercept
-  // pushState/replaceState before the page's own scripts capture history.
+  // Install hooks immediately at document-start so we intercept XHR/fetch/
+  // pushState/replaceState BEFORE the page's own scripts capture the originals.
+  try { installXHRHook(); } catch (e) {}
+  try { installFetchHook(); } catch (e) {}
   try { installHistoryHook(); } catch (e) {}
 
   // ================================================================
