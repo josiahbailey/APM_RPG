@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.6.8
+// @version      0.6.10
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -723,8 +723,11 @@
     // Floating update toast — appears above the panel when a newer version is on GitHub.
     el.updateBtn = $('button', {
       class: 'rpg-update-toast',
+      type: 'button',
       title: 'A new version is available. Click to install.',
-      onclick: () => {
+      onclick: (e) => {
+        if (e && e.preventDefault) e.preventDefault();
+        if (e && e.stopPropagation) e.stopPropagation();
         // If a newer version is already installed elsewhere, just reload this tab.
         if (updateInfo.newerLocalVersion) { location.reload(); return; }
         // Otherwise open the raw URL for Tampermonkey to install.
@@ -735,7 +738,18 @@
     });
     el.updateBtn.style.display = 'none';
     root.appendChild(el.updateBtn);
-    el.resetBtn = $('button', { class: 'rpg-reset-btn', html: DEV_MODE ? 'DEV \u00B7 Reset' : 'Reset', onclick: () => { if (!confirm('Reset ALL APM RPG data?')) return; Object.values(K).forEach(deleteRaw); location.reload(); } });
+    el.resetBtn = $('button', {
+      class: 'rpg-reset-btn',
+      type: 'button',
+      html: DEV_MODE ? 'DEV \u00B7 Reset' : 'Reset',
+      onclick: (e) => {
+        if (e && e.preventDefault) e.preventDefault();
+        if (e && e.stopPropagation) e.stopPropagation();
+        if (!confirm('Reset ALL APM RPG data?')) return;
+        Object.values(K).forEach(deleteRaw);
+        location.reload();
+      }
+    });
     root.appendChild(el.resetBtn);
   };
 
@@ -1441,7 +1455,7 @@
     detect: () => { const raw = detectUsername(); const norm = normalizeAlias(raw); console.log('raw:', raw, '-> alias:', norm); return norm; },
     state: state,
     setUsername: (u) => { state.player.username = u; persistPlayer(); renderPanel(); },
-    reset: () => { Object.values(K).forEach(deleteRaw); location.reload(); },
+    reset: () => { Object.values(K).forEach(deleteRaw); setTimeout(() => location.reload(), 50); },
     devMode: DEV_MODE,
     checkUpdate: () => checkForUpdate(true),
     updateInfo: () => ({ local: LOCAL_VERSION, latest: updateInfo.latest, available: updateInfo.available, checkedAt: updateInfo.checkedAt ? new Date(updateInfo.checkedAt).toISOString() : 'never', url: UPDATE_DOWNLOAD_URL }),
