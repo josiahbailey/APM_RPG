@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.7.15
+// @version      0.7.16
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -126,15 +126,7 @@
   const XP_REWARDS = { completeWorkOrder: 10, pageChange: 5 };
   const PAGE_CHANGE_XP_CHANCE = 0.15;  // 15% chance to award XP on SPA nav
 
-  // Mouse-travel XP: 1 CSS "meter" ~= 3800 pixels (physical inch-based approx).
-  // Every 5 meters of cursor movement awards +5 XP; the tally resets on award.
-  const PIXELS_PER_METER = 3800;
-  const MOUSE_XP_METERS = 5;
-  const MOUSE_XP_THRESHOLD_PX = PIXELS_PER_METER * MOUSE_XP_METERS;  // 19000
-  const MOUSE_XP_AMOUNT = 5;
-  const MOUSE_MAX_STEP_PX = 250;         // cap per-event to avoid cross-frame jumps
-  const MOUSE_FLUSH_INTERVAL_MS = 1500;  // debounce persistence
-  const MOUSE_XP_DISTANCE_MULT = 50;     // credit multiplier — 1px moved = 50px counted
+
   const xpToNextLevel = (level) => Math.floor(100 * Math.pow(level, 1.35));
   const WILD_SPAWN_TICK_MS = 15000;
   const WILD_SPAWN_CHANCE  = 0.05;  // rolled once per page load / SPA nav
@@ -273,7 +265,7 @@
   migrateStorage();
 
   const state = {
-    player: load(K.player, { level:1, xp:0, username:null, characterId:(CHARACTERS[0]&&CHARACTERS[0].id), hideRoamers:false, mouseTravel:0 }),
+    player: load(K.player, { level:1, xp:0, username:null, characterId:(CHARACTERS[0]&&CHARACTERS[0].id), hideRoamers:false }),
     collection: load(K.collection, []),
     equip: load(K.equip, { characterId:(CHARACTERS[0]&&CHARACTERS[0].id), petInstanceIds:[null,null,null], bannerId:'bn_none' }),
   };
@@ -352,42 +344,6 @@
     });
     console.log('[APM RPG] multi-tab sync active');
   };
-
-  // ================================================================
-  // MOUSE-TRAVEL XP
-  // Track cursor distance across mousemove events; award XP per 5 "meters".
-  // Only attached in the top frame to avoid double-counting from iframes.
-  // ================================================================
-  const setupMouseXP = () => {
-    try { if (window.top && window !== window.top) return; } catch (e) { /* cross-origin — assume top */ }
-    let lastX = null, lastY = null, buffer = 0, flushTimer = 0;
-    const flush = () => {
-      flushTimer = 0;
-      if (buffer <= 0) return;
-      state.player.mouseTravel = (state.player.mouseTravel || 0) + buffer;
-      buffer = 0;
-      if (state.player.mouseTravel >= MOUSE_XP_THRESHOLD_PX) {
-        const awards = Math.floor(state.player.mouseTravel / MOUSE_XP_THRESHOLD_PX);
-        state.player.mouseTravel = 0;
-        grantPlayerXP(MOUSE_XP_AMOUNT * awards, 'mouse ' + (MOUSE_XP_METERS * awards) + 'm');
-      } else {
-        persistPlayer();
-      }
-    };
-    document.addEventListener('mousemove', (e) => {
-      const x = e.clientX, y = e.clientY;
-      if (lastX !== null) {
-        const d = Math.min(MOUSE_MAX_STEP_PX, Math.hypot(x - lastX, y - lastY));
-        buffer += d * MOUSE_XP_DISTANCE_MULT;
-        if (!flushTimer) flushTimer = setTimeout(flush, MOUSE_FLUSH_INTERVAL_MS);
-      }
-      lastX = x; lastY = y;
-    }, { passive: true });
-    console.log('[APM RPG] mouse-travel XP tracking active');
-  };
-
-  // Backfill mouseTravel on players loaded from older versions.
-  if (typeof state.player.mouseTravel !== 'number') state.player.mouseTravel = 0;
 
   // Ensure equip has v3 shape even if a stale object was loaded
   if (!Array.isArray(state.equip.petInstanceIds)) state.equip.petInstanceIds = [null, null, null];
@@ -720,7 +676,7 @@
   // ================================================================
   GM_addStyle([
     '.rpg-root,.rpg-root *{box-sizing:border-box;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}',
-    '.rpg-panel{position:fixed;right:16px;bottom:16px;z-index:2147483000;background:rgba(20,20,28,0.72);color:#eee;border:1px solid #3b3b48;border-radius:12px;padding:10px;display:flex;gap:10px;align-items:center;box-shadow:0 8px 24px rgba(0,0,0,0.5);backdrop-filter:blur(6px);user-select:none}',
+    '.rpg-panel{position:fixed;right:16px;bottom:16px;z-index:2147483000;background:rgba(20,20,28,0.92);color:#eee;border:1px solid #3b3b48;border-radius:12px;padding:10px;display:flex;gap:10px;align-items:center;box-shadow:0 8px 24px rgba(0,0,0,0.5);backdrop-filter:blur(3px);user-select:none}',
     '.rpg-slot-container{display:flex;align-items:center;flex-shrink:0}',
     '.rpg-left-col{display:flex;flex-direction:column;gap:4px;align-items:stretch}',
     '.rpg-hide-btn{padding:2px 6px;font-size:9px;font-weight:700;border:1px solid #444;border-radius:4px;background:#22222c;color:#999;cursor:pointer;letter-spacing:0.3px;text-transform:uppercase}.rpg-hide-btn:hover{background:#2f2f3b;color:#ddd;border-color:#555}',
@@ -795,7 +751,7 @@
     '.rpg-slot.pet .rpg-slot-badge{font-size:9px;letter-spacing:0.2px}',
     '.rpg-slot-locked{background:#151520;border-color:#333;cursor:not-allowed;display:flex;align-items:center;justify-content:center}',
     '.rpg-lock-label{font-size:11px;font-weight:700;color:#666;letter-spacing:0.5px}',
-    '.rpg-panel{background-color:rgba(20,20,28,0.72);background-repeat:no-repeat}',
+    '.rpg-panel{background-color:rgba(20,20,28,0.92);background-repeat:no-repeat}',
     '.rpg-section-label{font-size:10px;font-weight:700;letter-spacing:1.2px;color:#9aa;margin:8px 0 4px}',
     '.rpg-menu-slider{display:flex;gap:8px;overflow-x:auto;padding:2px 0 6px;scrollbar-width:thin}',
     '.rpg-menu-slider::-webkit-scrollbar{height:6px}',
@@ -1217,61 +1173,8 @@
   };
 
   // ================================================================
-  // AUDIO + CELEBRATION EFFECTS
+  // CELEBRATION EFFECTS (visual only; audio was removed)
   // ================================================================
-  const audioCtx = (() => {
-    let ctx = null;
-    return () => {
-      if (!ctx) {
-        try { ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {}
-      }
-      return ctx;
-    };
-  })();
-
-  const beep = (freq, dur, delay, gain, type) => {
-    delay = delay || 0; gain = gain == null ? 0.08 : gain; type = type || 'sine';
-    const ctx = audioCtx(); if (!ctx) return;
-    const t = ctx.currentTime + delay;
-    const osc = ctx.createOscillator();
-    const g = ctx.createGain();
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, t);
-    g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(gain, t + 0.015);
-    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-    osc.connect(g); g.connect(ctx.destination);
-    osc.start(t); osc.stop(t + dur + 0.05);
-  };
-
-  const playCatchSound = (variant) => {
-    if (variant === 'rainbow') {
-      // Ascending arpeggio sweep
-      const notes = [523, 659, 784, 1047, 1319, 1568, 2093, 2637];
-      notes.forEach((f, i) => beep(f, 0.25, i * 0.08, 0.09, 'triangle'));
-      return;
-    }
-    if (variant === 'hollow') {
-      // Crystal bells — high triangle-wave arpeggio with a soft trailing chime
-      beep(880,  0.20, 0.00, 0.09, 'triangle');
-      beep(1319, 0.20, 0.12, 0.09, 'triangle');
-      beep(1760, 0.22, 0.24, 0.09, 'triangle');
-      beep(2093, 0.45, 0.38, 0.10, 'triangle');
-      beep(1319, 0.35, 0.50, 0.06, 'sine');  // gentle echo
-      return;
-    }
-    if (variant === 'shiny') {
-      // Three-note ascending
-      beep(659, 0.14, 0.00, 0.09, 'triangle');
-      beep(880, 0.14, 0.11, 0.09, 'triangle');
-      beep(1319, 0.30, 0.22, 0.10, 'triangle');
-      return;
-    }
-    // Normal: two-note confirm
-    beep(659, 0.12, 0.00, 0.08, 'sine');
-    beep(988, 0.20, 0.10, 0.08, 'sine');
-  };
-
   const spawnParticles = (originX, originY, count, colors, duration, spread) => {
     spread = spread || 220;
     for (let i = 0; i < count; i++) {
@@ -1320,7 +1223,6 @@
 
   // Returns extra delay (ms) to wait before showing the catch modal
   const playCatchCelebration = (variant, x, y) => {
-    playCatchSound(variant);
     if (variant === 'normal') {
       spawnParticles(x, y, 14, ['#facc15','#fef3c7','#fff'], 900, 150);
       return 250;
@@ -1360,10 +1262,6 @@
     setTimeout(() => toast.remove(), 1500);
   };
 
-  const playXPGainSound = () => {
-    beep(880,  0.09, 0.00, 0.05, 'sine');
-    beep(1319, 0.16, 0.07, 0.06, 'sine');
-  };
   const flashXPGain = (amount) => {
     if (!el.stats || !el.bar) return;
     const t = document.createElement('div');
@@ -1376,7 +1274,6 @@
     void el.bar.offsetWidth;
     el.bar.classList.add('rpg-bar-pulse');
     setTimeout(() => el.bar && el.bar.classList.remove('rpg-bar-pulse'), 500);
-    playXPGainSound();
   };
   const grantPlayerXP = (amount, reason) => {
     if (!amount) return;
@@ -1707,7 +1604,6 @@
 
   console.log('[APM RPG] v' + LOCAL_VERSION + ' loaded');
     setupMultiTabSync();
-    setupMouseXP();
     bumpInstalledVersion();
     loadUpdateCache();
     buildPanel(); renderPanel();
