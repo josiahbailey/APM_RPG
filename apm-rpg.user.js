@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.7.42
+// @version      0.7.43
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -1397,17 +1397,32 @@
   const QUADRANT_OUTER_V_MULT = 0.9;   // squash arc vertically -10%
   const QUADRANT_CENTER_Y_OFFSET = 50; // shift arc center down 50px so top doesn't reach as high
 
-  // ---- 3-corner bumpers ----
-  // Reject target angles in narrow windows at 0 (west/bottom), π/4 (diagonal),
-  // and π/2 (north/top) — pets no longer linger in those corners.
-  const BUMPER_ANGLES = [0, Math.PI / 4, Math.PI / 2];
-  const BUMPER_HALF_WIDTH = 0.18;      // ~10.3° each side of each corner
-  const BUMPER_VIZ_LEN    = 90;        // visual bumper length (px)
-  const BUMPER_VIZ_THICK  = 10;        // visual bumper thickness (px)
+  // ---- 2 corner bumpers ----
+  // The roaming region is bounded by the arc (upper-left curve) plus the
+  // bottom + right viewport edges. Its two ground-level corners are where
+  // pets get stuck sliding: bottom-right (viewport corner, under the panel)
+  // and bottom-left (where the arc meets the viewport bottom). We reject
+  // targets within BUMPER_RADIUS of either corner and draw a diagonal wall
+  // there when the debug viz is on.
+  const BUMPER_RADIUS    = 110;    // rejection radius from each corner (px)
+  const BUMPER_VIZ_LEN   = 130;    // visual bumper length (px)
+  const BUMPER_VIZ_THICK = 10;     // visual bumper thickness (px)
 
-  const isAngleBlocked = (angle) => {
-    for (const c of BUMPER_ANGLES) {
-      if (Math.abs(angle - c) < BUMPER_HALF_WIDTH) return true;
+  const getBumperCorners = () => {
+    const W = window.innerWidth, H = window.innerHeight;
+    const baseR = Math.max(QUADRANT_INNER_R + 120, Math.min(W, H) * QUADRANT_OUTER_FRAC);
+    const arcW  = baseR * QUADRANT_OUTER_H_MULT;
+    return [
+      // Bottom-right (viewport corner, behind panel). Wall faces upper-left.
+      { x: W,        y: H, rotDeg: -45 },
+      // Bottom-left (arc's westernmost point at viewport bottom). Wall faces upper-right.
+      { x: W - arcW, y: H, rotDeg:  45 },
+    ];
+  };
+
+  const inBumperZone = (px, py) => {
+    for (const c of getBumperCorners()) {
+      if (Math.hypot(px - c.x, py - c.y) < BUMPER_RADIUS) return true;
     }
     return false;
   };
@@ -1430,7 +1445,8 @@
     };
     for (let i = 0; i < 16; i++) {
       const t = generate();
-      if (isAngleBlocked(t.angle)) continue;
+      // Check bumper against the sprite's CENTER, not top-left corner.
+      if (inBumperZone(t.x + spriteW / 2, t.y + spriteH / 2)) continue;
       if (Math.hypot(t.x - curX, t.y - curY) < minMoveDist) continue;
       return t;
     }
@@ -1464,22 +1480,28 @@
     path.setAttribute('opacity', '0.75');
     svg.appendChild(path);
     container.appendChild(svg);
-    // Three flat bumpers, tangent to the arc, angled toward its center.
-    for (const ang of BUMPER_ANGLES) {
-      const px = cx - Math.cos(ang) * arcW;
-      const py = cy - Math.sin(ang) * arcH;
-      const rotDeg = ang * 180 / Math.PI + 90; // perpendicular to radial
+    // Two flat bumpers at the region's ground-level corners, each rotated
+    // so its face points diagonally inward toward the largest interior space.
+    // We shift the bumper along its face-normal by ~half the rejection radius
+    // so the visual sits inside the rejection circle, not at the exact corner.
+    const OFFSET = BUMPER_RADIUS * 0.45;
+    for (const c of getBumperCorners()) {
+      // rotDeg -45 -> face direction (upper-left) = (-1,-1)/√2
+      // rotDeg  45 -> face direction (upper-right) = (1,-1)/√2
+      const faceRad = (c.rotDeg + 90) * Math.PI / 180;  // face normal is perpendicular to the wall's long axis
+      const bx = c.x + Math.cos(faceRad) * OFFSET;
+      const by = c.y + Math.sin(faceRad) * OFFSET;
       const b = document.createElement('div');
       b.style.cssText =
         'position:absolute;' +
-        'left:' + (px - BUMPER_VIZ_LEN / 2) + 'px;' +
-        'top:'  + (py - BUMPER_VIZ_THICK / 2) + 'px;' +
+        'left:' + (bx - BUMPER_VIZ_LEN / 2) + 'px;' +
+        'top:'  + (by - BUMPER_VIZ_THICK / 2) + 'px;' +
         'width:'  + BUMPER_VIZ_LEN + 'px;' +
         'height:' + BUMPER_VIZ_THICK + 'px;' +
         'background:rgba(239,68,68,0.65);' +
         'border:1px solid #ef4444;' +
         'border-radius:3px;' +
-        'transform:rotate(' + rotDeg + 'deg);' +
+        'transform:rotate(' + c.rotDeg + 'deg);' +
         'transform-origin:center;' +
         'box-shadow:0 0 10px rgba(239,68,68,0.6)';
       container.appendChild(b);
