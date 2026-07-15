@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.7.4
+// @version      0.7.6
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -389,35 +389,16 @@
   };
   const LOCAL_VERSION = (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '0.0.0';
 
-  // ---- Safe reload (mirrors APM Master) ----
-  // EAM is a SPA — location.reload() lands on a broken URL. Navigate the top
-  // frame to the tenant's logindisp landing page instead, which forces a clean
-  // session bootstrap. Non-EAM pages fall back to a normal reload.
-  const EAM_HOST_RE = /(?:^|\.)(?:eam\.hxgnsmartcloud\.com|eam\.aws\.a2z\.com)$/i;
-  const getEamTenant = () => {
-    try {
-      const t1 = new URLSearchParams(window.location.search).get('tenant');
-      if (t1) return t1;
-    } catch (e) {}
-    if (window.top !== window) {
-      try {
-        const t2 = new URLSearchParams(window.top.location.search).get('tenant');
-        if (t2) return t2;
-      } catch (e) { /* cross-origin, ignore */ }
-    }
-    return '';
-  };
+  // ---- Safe reload ----
+  // Hardcoded to the APM dashboard. EAM's SPA fragment routing breaks
+  // location.reload() and even a tenant-aware landing URL still lands on a
+  // stale page. Sending users to /web/base/COMMON is a guaranteed clean slate.
+  const RELOAD_URL = 'https://us1.eam.hxgnsmartcloud.com/web/base/COMMON';
   const safeReload = () => {
-    try {
-      const host = (window.top && window.top.location && window.top.location.hostname) || window.location.hostname;
-      if (EAM_HOST_RE.test(host)) {
-        const origin = (window.top && window.top.location && window.top.location.origin) || window.location.origin;
-        const tenant = getEamTenant();
-        const target = origin + '/web/base/logindisp' + (tenant ? '?tenant=' + encodeURIComponent(tenant) : '');
-        try { window.top.location.href = target; return; }
-        catch (e) { window.location.href = target; return; }
-      }
-    } catch (e) { /* fall through to plain reload */ }
+    try { window.top.location.href = RELOAD_URL; return; }
+    catch (e) {}
+    try { window.location.href = RELOAD_URL; return; }
+    catch (e) {}
     try { location.reload(); } catch (e) {}
   };
   const updateInfo = { checkedAt: 0, latest: null, available: false, newerLocalVersion: null };
@@ -669,7 +650,7 @@
     '.rpg-menu-item .n{font-size:11px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
     '.rpg-menu-item .l{font-size:10px;color:#ffd166}',
     '.rpg-empty-msg{font-size:12px;color:#888;padding:12px 0}',
-    '.rpg-dex{max-width:360px;text-align:left}',
+    '.rpg-dex{max-width:620px;width:calc(100vw - 40px);text-align:left;padding:26px 32px}',
     '.rpg-dex-list{max-height:55vh;overflow-y:auto}',
     '.rpg-roam{position:fixed;z-index:2147482900;pointer-events:none;transition:left 10s linear,top 10s linear}',
     '.rpg-roam img{width:64px;height:64px;object-fit:contain;filter:drop-shadow(0 4px 6px rgba(0,0,0,0.4))}',
@@ -748,8 +729,8 @@
     // ── Unified wild pulse (any special variant) ─────────────────
     '.rpg-wild-special img{animation:rpgWildPulse 900ms ease-in-out infinite alternate}',
     // ── Dex layout with variant badges ───────────────────────────
-    '.rpg-dex-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;padding:4px;max-height:60vh;overflow-y:auto}',
-    '.rpg-dex-card{background:#1e1e2e;border-radius:8px;padding:8px 6px 6px;text-align:center;border:1.5px solid #2a2a36;position:relative;transition:border-color 150ms}',
+    '.rpg-dex-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;padding:8px 6px;max-height:62vh;overflow-y:auto;overflow-x:hidden;box-sizing:border-box}',
+    '.rpg-dex-card{background:#1e1e2e;border-radius:8px;padding:12px 8px 10px;text-align:center;border:1.5px solid #2a2a36;position:relative;transition:border-color 150ms;box-sizing:border-box}',
     '.rpg-dex-card:hover{border-color:#3b3b48}',
     '.rpg-dex-card-badges{display:flex;justify-content:center;gap:5px;margin-bottom:6px;height:12px}',
     '.rpg-dex-mini{width:10px;height:10px;transform:rotate(45deg);background:#2a2a36;border:1px solid #3a3a4a;transition:all 250ms;flex-shrink:0}',
