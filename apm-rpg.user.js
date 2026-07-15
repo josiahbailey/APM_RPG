@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.7.38
+// @version      0.7.39
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -543,6 +543,18 @@
   });
   const rarityColor = (r) => (RARITY_META[r] && RARITY_META[r].color) || '#eee';
   const rarityHTML = (r) => '<span class="rpg-rarity" style="color:' + rarityColor(r) + '">' + r + '</span>';
+  // For variants (shiny/hollow/rainbow) we show the variant label in place of
+  // the base rarity — same slot, different word. The dex still uses rarityHTML
+  // directly because its badges already indicate variants there.
+  const variantRarityHTML = (v, baseRarity) => {
+    if (!v || v === 'normal') return rarityHTML(baseRarity);
+    const meta = VARIANT_META[v];
+    if (!meta) return rarityHTML(baseRarity);
+    if (meta.color === 'rainbow') {
+      return '<span class="rpg-rarity rpg-rarity-rainbow">' + meta.label + '</span>';
+    }
+    return '<span class="rpg-rarity" style="color:' + meta.color + '">' + meta.label + '</span>';
+  };
   const variantBadge = (v) => (VARIANT_META[v] && VARIANT_META[v].badge) || '';
   const variantLabel = (v) => (VARIANT_META[v] && VARIANT_META[v].label) || 'Normal';
   const variantImgField = { shiny: 'shinyImg', hollow: 'hollowImg', rainbow: 'rainbowImg' };
@@ -797,6 +809,7 @@
     '@keyframes rpgRainbowHue{0%{filter:saturate(1.5) hue-rotate(0deg) drop-shadow(0 0 6px #ff00e6) drop-shadow(0 0 14px #00e6ff)}100%{filter:saturate(1.5) hue-rotate(360deg) drop-shadow(0 0 6px #ff00e6) drop-shadow(0 0 14px #00e6ff)}}',
     '.rpg-rainbow{position:relative}',
     '.rpg-rainbow::after{content:"";position:absolute;inset:-4px;pointer-events:none;opacity:0.9;background:radial-gradient(circle at 20% 25%,#ff69b4 0 2px,transparent 3px),radial-gradient(circle at 78% 60%,#00ff88 0 2px,transparent 3px),radial-gradient(circle at 55% 15%,#00aaff 0 2px,transparent 3px),radial-gradient(circle at 40% 85%,#ffea00 0 2px,transparent 3px),radial-gradient(circle at 65% 45%,#ff4488 0 1.5px,transparent 2.5px);animation:rpgRainbowSparkle 1.6s ease-in-out infinite alternate}',
+    '.rpg-rarity-rainbow{background:linear-gradient(90deg,#ff5555,#ffaa00,#ffff55,#55ff77,#55ccff,#aa66ff,#ff66cc);background-clip:text;-webkit-background-clip:text;color:transparent;font-weight:700}',
     '@keyframes rpgRainbowSparkle{0%{transform:rotate(0deg) scale(1);opacity:0.4}100%{transform:rotate(180deg) scale(1.15);opacity:1}}',
     // ── Unified wild pulse (any special variant) ─────────────────
     '.rpg-wild-special img{animation:rpgWildPulse 900ms ease-in-out infinite alternate}',
@@ -948,7 +961,7 @@
         if (p) {
           const v = variantOf(inst);
           petSlot.appendChild($('img', { src: petImg(p, v) }));
-          petSlot.appendChild($('div', { class: 'rpg-slot-badge', html: (variantBadge(v) ? variantBadge(v) + ' ' : '') + rarityHTML(p.rarity) }));
+          petSlot.appendChild($('div', { class: 'rpg-slot-badge', html: (variantBadge(v) ? variantBadge(v) + ' ' : '') + variantRarityHTML(v, p.rarity) }));
           applyVariantClasses(petSlot, p, v);
         }
       } else {
@@ -1158,7 +1171,7 @@
         item.appendChild(delBtn);
         item.appendChild($('img', { src: petImg(p, v) }));
         item.appendChild($('div', { class: 'n', html: (variantBadge(v) ? variantBadge(v) + ' ' : '') + p.name }));
-        item.appendChild($('div', { class: 'l', html: (v !== 'normal' ? variantLabel(v) + ' \u00B7 ' : '') + rarityHTML(p.rarity) }));
+        item.appendChild($('div', { class: 'l', html: variantRarityHTML(v, p.rarity) }));
         if (inOtherSlot) item.appendChild($('div', { class: 'rpg-in-slot-tag', html: 'Slot ' + (assignedTo + 1) }));
         grid.appendChild(item);
       }
