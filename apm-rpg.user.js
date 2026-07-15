@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.7.0
+// @version      0.7.3
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -388,6 +388,38 @@
     return 0;
   };
   const LOCAL_VERSION = (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '0.0.0';
+
+  // ---- Safe reload (mirrors APM Master) ----
+  // EAM is a SPA — location.reload() lands on a broken URL. Navigate the top
+  // frame to the tenant's logindisp landing page instead, which forces a clean
+  // session bootstrap. Non-EAM pages fall back to a normal reload.
+  const EAM_HOST_RE = /(?:^|\.)(?:eam\.hxgnsmartcloud\.com|eam\.aws\.a2z\.com)$/i;
+  const getEamTenant = () => {
+    try {
+      const t1 = new URLSearchParams(window.location.search).get('tenant');
+      if (t1) return t1;
+    } catch (e) {}
+    if (window.top !== window) {
+      try {
+        const t2 = new URLSearchParams(window.top.location.search).get('tenant');
+        if (t2) return t2;
+      } catch (e) { /* cross-origin, ignore */ }
+    }
+    return '';
+  };
+  const safeReload = () => {
+    try {
+      const host = (window.top && window.top.location && window.top.location.hostname) || window.location.hostname;
+      if (EAM_HOST_RE.test(host)) {
+        const origin = (window.top && window.top.location && window.top.location.origin) || window.location.origin;
+        const tenant = getEamTenant();
+        const target = origin + '/web/base/logindisp' + (tenant ? '?tenant=' + encodeURIComponent(tenant) : '');
+        try { window.top.location.href = target; return; }
+        catch (e) { window.location.href = target; return; }
+      }
+    } catch (e) { /* fall through to plain reload */ }
+    try { location.reload(); } catch (e) {}
+  };
   const updateInfo = { checkedAt: 0, latest: null, available: false, newerLocalVersion: null };
   const loadUpdateCache = () => {
     try {
@@ -607,7 +639,7 @@
     '.rpg-slot img{width:100%;height:100%;object-fit:cover;display:block}',
     '.rpg-slot.pet{width:'+PET_ICON_PX+'px;height:'+PET_ICON_PX+'px}',
     '.rpg-slot .rpg-slot-badge{position:absolute;bottom:0;left:0;right:0;font-size:10px;background:rgba(0,0,0,0.7);text-align:center;padding:1px 2px}',
-    '.rpg-stats{min-width:180px;position:relative;display:flex;flex-direction:column;gap:2px}',
+    '.rpg-stats{min-width:140px;position:relative;display:flex;flex-direction:column;gap:2px}',
     '.rpg-stat-row{display:flex;align-items:center;justify-content:space-between;gap:8px}',
     '.rpg-stat-row .rpg-name,.rpg-stat-row .rpg-xp-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
     '.rpg-xp-gain{position:absolute;right:4px;top:0;font-size:12px;font-weight:800;color:#22c55e;text-shadow:0 1px 3px rgba(0,0,0,0.7),0 0 6px rgba(34,197,94,0.5);pointer-events:none;z-index:5;white-space:nowrap;animation:rpgXpGain 1.2s cubic-bezier(0.22,1,0.36,1) forwards}',
@@ -800,7 +832,7 @@
         if (e && e.preventDefault) e.preventDefault();
         if (e && e.stopPropagation) e.stopPropagation();
         // If a newer version is already installed elsewhere, just reload this tab.
-        if (updateInfo.newerLocalVersion) { location.reload(); return; }
+        if (updateInfo.newerLocalVersion) { safeReload(); return; }
         // Otherwise open the raw URL for Tampermonkey to install.
         if (UPDATE_DOWNLOAD_URL && UPDATE_DOWNLOAD_URL.indexOf('REPLACE_ME') === -1) {
           window.open(UPDATE_DOWNLOAD_URL, '_blank');
@@ -818,7 +850,7 @@
         if (e && e.stopPropagation) e.stopPropagation();
         if (!confirm('Reset ALL APM RPG data?')) return;
         Object.values(K).forEach(deleteRaw);
-        location.reload();
+        safeReload();
       }
     });
     root.appendChild(el.resetBtn);
@@ -883,10 +915,13 @@
     el.xpTxt.textContent = 'EXP ' + state.player.xp + ' / ' + need;
     if (el.hidePetsBtn) el.hidePetsBtn.textContent = state.player.hideRoamers ? 'Show Pets' : 'Hide Pets';
     if (el.updateBtn) {
-      // Priority: reload-for-newer-installed > github-update-available > hidden
-      if (updateInfo.newerLocalVersion) {
-        el.updateBtn.innerHTML = 'RELOAD FOR v' + updateInfo.newerLocalVersion;
-        el.updateBtn.title = 'A newer version is already installed. Click to reload this tab.';
+      // Priority: reload-for-newer-installed OR pending-install > github-update-available > hidden
+      // pendingInstallVersion is set when user clicks UPDATE — after they return
+      // to this tab we surface RELOAD without waiting for another tab to boot.
+      const reloadTargetVersion = updateInfo.newerLocalVersion || updateInfo.pendingInstallVersion;
+      if (reloadTargetVersion) {
+        el.updateBtn.innerHTML = 'RELOAD FOR v' + reloadTargetVersion;
+        el.updateBtn.title = 'A newer version is available. Click to reload this tab into it.';
         el.updateBtn.classList.add('rpg-reload-mode');
         el.updateBtn.style.display = '';
       } else if (updateInfo.available && updateInfo.latest) {
@@ -1487,7 +1522,20 @@
   };
 
   const boot = () => {
-    console.log('[APM RPG] v' + LOCAL_VERSION + ' loaded');
+    // Wake the update toast the moment this tab comes back into view.
+  // The user just clicked UPDATE -> went to Tampermonkey -> comes back here.
+  // Show RELOAD immediately using the version they went to install.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
+    if (updateInfo.pendingInstallVersion && typeof renderPanel === 'function' && el && el.panel) {
+      renderPanel();
+    }
+    // Also do an opportunistic re-check + resync — cheap, rate-limited.
+    try { if (typeof bumpInstalledVersion === 'function') bumpInstalledVersion(); } catch (e) {}
+    try { if (typeof checkForUpdate === 'function') checkForUpdate(false); } catch (e) {}
+  });
+
+  console.log('[APM RPG] v' + LOCAL_VERSION + ' loaded');
     setupMultiTabSync();
     bumpInstalledVersion();
     loadUpdateCache();
@@ -1526,7 +1574,7 @@
     detect: () => { const raw = detectUsername(); const norm = normalizeAlias(raw); console.log('raw:', raw, '-> alias:', norm); return norm; },
     state: state,
     setUsername: (u) => { state.player.username = u; persistPlayer(); renderPanel(); },
-    reset: () => { Object.values(K).forEach(deleteRaw); setTimeout(() => location.reload(), 50); },
+    reset: () => { Object.values(K).forEach(deleteRaw); setTimeout(() => safeReload(), 50); },
     devMode: DEV_MODE,
     checkUpdate: () => checkForUpdate(true),
     updateInfo: () => ({ local: LOCAL_VERSION, latest: updateInfo.latest, available: updateInfo.available, checkedAt: updateInfo.checkedAt ? new Date(updateInfo.checkedAt).toISOString() : 'never', url: UPDATE_DOWNLOAD_URL }),
