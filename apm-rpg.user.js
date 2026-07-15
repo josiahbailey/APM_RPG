@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.7.8
+// @version      0.7.9
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -124,7 +124,16 @@
   }
 
   const XP_REWARDS = { completeWorkOrder: 10, pageChange: 5 };
-  const PAGE_CHANGE_XP_CHANCE = 0.10;  // 10% chance to award XP on SPA nav
+  const PAGE_CHANGE_XP_CHANCE = 0.15;  // 15% chance to award XP on SPA nav
+
+  // Mouse-travel XP: 1 CSS "meter" ~= 3800 pixels (physical inch-based approx).
+  // Every 5 meters of cursor movement awards +5 XP; the tally resets on award.
+  const PIXELS_PER_METER = 3800;
+  const MOUSE_XP_METERS = 5;
+  const MOUSE_XP_THRESHOLD_PX = PIXELS_PER_METER * MOUSE_XP_METERS;  // 19000
+  const MOUSE_XP_AMOUNT = 5;
+  const MOUSE_MAX_STEP_PX = 250;         // cap per-event to avoid cross-frame jumps
+  const MOUSE_FLUSH_INTERVAL_MS = 1500;  // debounce persistence
   const xpToNextLevel = (level) => Math.floor(100 * Math.pow(level, 1.35));
   const WILD_SPAWN_TICK_MS = 15000;
   const WILD_SPAWN_CHANCE  = 0.05;  // rolled once per page load / SPA nav
@@ -263,7 +272,7 @@
   migrateStorage();
 
   const state = {
-    player: load(K.player, { level:1, xp:0, username:null, characterId:(CHARACTERS[0]&&CHARACTERS[0].id), hideRoamers:false }),
+    player: load(K.player, { level:1, xp:0, username:null, characterId:(CHARACTERS[0]&&CHARACTERS[0].id), hideRoamers:false, mouseTravel:0 }),
     collection: load(K.collection, []),
     equip: load(K.equip, { characterId:(CHARACTERS[0]&&CHARACTERS[0].id), petInstanceIds:[null,null,null], bannerId:'bn_none' }),
   };
@@ -342,6 +351,42 @@
     });
     console.log('[APM RPG] multi-tab sync active');
   };
+
+  // ================================================================
+  // MOUSE-TRAVEL XP
+  // Track cursor distance across mousemove events; award XP per 5 "meters".
+  // Only attached in the top frame to avoid double-counting from iframes.
+  // ================================================================
+  const setupMouseXP = () => {
+    try { if (window.top && window !== window.top) return; } catch (e) { /* cross-origin — assume top */ }
+    let lastX = null, lastY = null, buffer = 0, flushTimer = 0;
+    const flush = () => {
+      flushTimer = 0;
+      if (buffer <= 0) return;
+      state.player.mouseTravel = (state.player.mouseTravel || 0) + buffer;
+      buffer = 0;
+      if (state.player.mouseTravel >= MOUSE_XP_THRESHOLD_PX) {
+        const awards = Math.floor(state.player.mouseTravel / MOUSE_XP_THRESHOLD_PX);
+        state.player.mouseTravel = 0;
+        grantPlayerXP(MOUSE_XP_AMOUNT * awards, 'mouse ' + (MOUSE_XP_METERS * awards) + 'm');
+      } else {
+        persistPlayer();
+      }
+    };
+    document.addEventListener('mousemove', (e) => {
+      const x = e.clientX, y = e.clientY;
+      if (lastX !== null) {
+        const d = Math.min(MOUSE_MAX_STEP_PX, Math.hypot(x - lastX, y - lastY));
+        buffer += d;
+        if (!flushTimer) flushTimer = setTimeout(flush, MOUSE_FLUSH_INTERVAL_MS);
+      }
+      lastX = x; lastY = y;
+    }, { passive: true });
+    console.log('[APM RPG] mouse-travel XP tracking active');
+  };
+
+  // Backfill mouseTravel on players loaded from older versions.
+  if (typeof state.player.mouseTravel !== 'number') state.player.mouseTravel = 0;
 
   // Ensure equip has v3 shape even if a stale object was loaded
   if (!Array.isArray(state.equip.petInstanceIds)) state.equip.petInstanceIds = [null, null, null];
@@ -1362,18 +1407,37 @@
   }, true);
 
   // ================================================================
-  // MOVEMENT HELPER — retry random until >= minDist from current, else jump
-  // to the opposite side. Prevents "stuck against the wall" appearance when
-  // Math.random happens to pick a spot near the current one.
+  // MOVEMENT HELPER — quarter-circle boundary around the bottom-right UI.
+  //
+  // Pets (wild + roamers) live within an arc centered at (innerWidth, innerHeight),
+  // between an INNER radius (keeps them clear of the RPG panel) and an OUTER
+  // radius (~60% of the shorter viewport dim). Angle sweep is 0..π/2 measured
+  // "upward-leftward" from the bottom-right corner.
+  //
+  // Also enforces a minimum move distance so pets don't appear stuck when
+  // Math.random picks a spot near the current one.
   // ================================================================
-  const pickFarPoint = (curX, curY, xMin, xMax, yMin, yMax, minDist) => {
-    for (let i = 0; i < 10; i++) {
-      const nx = rand(xMin, xMax);
-      const ny = rand(yMin, yMax);
-      if (Math.hypot(nx - curX, ny - curY) >= minDist) return { x: nx, y: ny };
+  const QUADRANT_INNER_R = 260;
+  const QUADRANT_OUTER_FRAC = 0.6;
+  const pickQuadrantPoint = (spriteW, spriteH, curX, curY, minMoveDist) => {
+    const W = window.innerWidth, H = window.innerHeight;
+    const outerR = Math.max(QUADRANT_INNER_R + 120, Math.min(W, H) * QUADRANT_OUTER_FRAC);
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    const generate = () => {
+      const angle = Math.random() * (Math.PI / 2);           // 0 = west, π/2 = north
+      const radius = QUADRANT_INNER_R + Math.random() * (outerR - QUADRANT_INNER_R);
+      const cx = W - Math.cos(angle) * radius;               // sprite CENTER x
+      const cy = H - Math.sin(angle) * radius;               // sprite CENTER y
+      return {
+        x: clamp(cx - spriteW / 2, 0, Math.max(0, W - spriteW)),
+        y: clamp(cy - spriteH / 2, 0, Math.max(0, H - spriteH)),
+      };
+    };
+    for (let i = 0; i < 12; i++) {
+      const t = generate();
+      if (Math.hypot(t.x - curX, t.y - curY) >= minMoveDist) return t;
     }
-    const midX = (xMin + xMax) / 2, midY = (yMin + yMax) / 2;
-    return { x: curX < midX ? xMax : xMin, y: curY < midY ? yMax : yMin };
+    return generate();
   };
 
   // ================================================================
@@ -1386,7 +1450,7 @@
     const r = roamers[i]; if (!r) return;
     const curX = parseFloat(r.style.left) || 0;
     const curY = parseFloat(r.style.top) || 0;
-    const t = pickFarPoint(curX, curY, 20, window.innerWidth - 80, 20, window.innerHeight - 80, 200);
+    const t = pickQuadrantPoint(80, 80, curX, curY, 200);
     r.style.left = Math.floor(t.x) + 'px';
     r.style.top  = Math.floor(t.y) + 'px';
   };
@@ -1404,8 +1468,9 @@
     const el = $('div', { class: cls });
     el.appendChild($('div', { class: 'label', html: (variantBadge(v) ? variantBadge(v) + ' ' : '') + p.name }));
     el.appendChild($('img', { src: petImg(p, v) }));
-    el.style.left = Math.floor(rand(20, window.innerWidth - 80)) + 'px';
-    el.style.top  = Math.floor(rand(20, window.innerHeight - 80)) + 'px';
+    const initPos = pickQuadrantPoint(80, 80, -9999, -9999, 0);
+    el.style.left = Math.floor(initPos.x) + 'px';
+    el.style.top  = Math.floor(initPos.y) + 'px';
     document.body.appendChild(el);
     roamers[i] = el;
     requestAnimationFrame(() => requestAnimationFrame(() => moveRoamerAt(i)));
@@ -1438,7 +1503,7 @@
     if (!wildEl) return;
     const curX = parseFloat(wildEl.style.left) || 0;
     const curY = parseFloat(wildEl.style.top) || 0;
-    const t = pickFarPoint(curX, curY, 40, window.innerWidth - 160, 40, window.innerHeight - 220, 260);
+    const t = pickQuadrantPoint(160, 200, curX, curY, 260);
     wildEl.style.left = Math.floor(t.x) + 'px';
     wildEl.style.top  = Math.floor(t.y) + 'px';
   };
@@ -1455,8 +1520,9 @@
     wildEl.appendChild($('div', { class: 'label', html: vLabel }));
     wildEl.appendChild($('img', { src: petImg(wildPet, wildVariant) }));
     wildEl.appendChild($('div', { class: 'catch-hint', html: 'CATCH!' }));
-    wildEl.style.left = Math.floor(rand(80, window.innerWidth - 240)) + 'px';
-    wildEl.style.top = Math.floor(rand(80, window.innerHeight - 280)) + 'px';
+    const wInit = pickQuadrantPoint(160, 200, -9999, -9999, 0);
+    wildEl.style.left = Math.floor(wInit.x) + 'px';
+    wildEl.style.top  = Math.floor(wInit.y) + 'px';
     document.body.appendChild(wildEl);
     requestAnimationFrame(() => requestAnimationFrame(moveWild));
     wildRoamTimer = setInterval(moveWild, 8000);
@@ -1601,6 +1667,7 @@
 
   console.log('[APM RPG] v' + LOCAL_VERSION + ' loaded');
     setupMultiTabSync();
+    setupMouseXP();
     bumpInstalledVersion();
     loadUpdateCache();
     buildPanel(); renderPanel();
