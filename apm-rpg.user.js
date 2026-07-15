@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.7.31
+// @version      0.7.33
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -123,35 +123,9 @@
     if (m) { pet.catchBaseRate = m.catchRate; pet.spawnWeight = m.spawnWeight; }
   }
 
-  const XP_REWARDS = { completeWorkOrder: 10, pageChange: 5, ptpCreated: 10 };
+  const XP_REWARDS = { pageChange: 5 };
 
-  // ---- Action-detection URL patterns (mirrored from APM Master install.user.js)
-  // PTP starts: submit_assessment=complete/cancel; create_* = start.
-  const PTP_START_URL_RE     = /\/(?:create_assessment|create_troubleshooting|convert_iptp_assess)/i;
-  const PTP_COMPLETE_URL_RE  = /\/submit_assessment/i;
-  // EAM SPA API endpoints match /web/base/<SCREEN>.xmlhttp. Heartbeat/keepalive
-  // endpoints are noisy and excluded.
-  const EAM_API_URL_RE       = /\/web\/base\/[A-Za-z0-9_]+\.xmlhttp/i;
-  const EAM_HEARTBEAT_RE     = /(?:\/web\/base\/)?(?:SESSION|BSFOOTR|KEEPALIVE|BSTIMR|IDLTIMR)(?:\.xmlhttp)?(?:$|[?&])/i;
-  // Request-body sniff: EAM sends workorderstatus=C for "Complete" (single C).
-  const WOCOMPLETE_BODY_RE   = /(?:^|[?&;])workorderstatus=C(?![A-Z])/i;
-  // Buttons that plausibly commit a WO save operation.
-  const SAVE_BTN_TEXT_RE     = /^(?:save|ok|apply|submit|complete|save & close|save and close)$/i;
-  // Host-based classification (URL fallback when path regex doesn't match).
-  // EAM SPA fires XHRs with raw screen codes as relative paths (USRTAB, USAGE,
-  // etc.) — no /web/base/ prefix — so host is the only reliable signal.
-  const EAM_HOST_RE          = /(?:^|\.)eam\.(?:hxgnsmartcloud\.com|aws\.a2z\.com)$/i;
-  const PTP_HOST_RE          = /(?:^|\.)(?:ptp|insights)\.amazon\.dev$/i;
-  const resolveUrl = (u) => {
-    try { return new URL(String(u || ''), (typeof location !== 'undefined' ? location.href : undefined)).href; }
-    catch (e) { return String(u || ''); }
-  };
-  const hostOf = (u) => {
-    try { return new URL(u).hostname; } catch (e) { return ''; }
-  };
-  const NAV_COOLDOWN_MS      = 2000;
-  const PTP_XP_COOLDOWN_MS   = 30000;
-  const COMPLETE_COOLDOWN_MS = 4000;
+  const NAV_COOLDOWN_MS       = 2000;
   const PAGE_CHANGE_XP_CHANCE = 0.15;  // 15% chance to award XP on SPA nav
 
 
@@ -705,8 +679,8 @@
   GM_addStyle([
     '.rpg-root,.rpg-root *{box-sizing:border-box;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}',
     '.rpg-panel-wrap{position:fixed;right:16px;bottom:16px;z-index:2147483000;display:flex;align-items:stretch;transition:transform 320ms cubic-bezier(0.4,0,0.2,1)}',
-    '.rpg-panel-wrap.rpg-collapsed{transform:translateX(calc(100% - 20px))}',
-    '.rpg-panel-tab{width:20px;min-height:60px;align-self:center;background:rgba(20,20,28,0.85);color:#ffd166;border:1px solid #3b3b48;border-right:none;border-radius:8px 0 0 8px;cursor:pointer;writing-mode:vertical-rl;text-orientation:mixed;display:flex;align-items:center;justify-content:center;font-weight:800;letter-spacing:3px;font-size:11px;user-select:none;transition:background 150ms,color 150ms;backdrop-filter:blur(2px);box-shadow:-3px 0 8px rgba(0,0,0,0.3)}',
+    '.rpg-panel-wrap.rpg-collapsed{transform:translateX(calc(100% - 26px))}',
+    '.rpg-panel-tab{width:26px;align-self:stretch;background:rgba(20,20,28,0.85);color:#ffd166;border:1px solid #3b3b48;border-right:none;border-radius:8px 0 0 8px;cursor:pointer;writing-mode:vertical-rl;text-orientation:mixed;display:flex;align-items:center;justify-content:center;font-weight:800;letter-spacing:3px;font-size:12px;user-select:none;transition:background 150ms,color 150ms;backdrop-filter:blur(2px);box-shadow:-3px 0 8px rgba(0,0,0,0.3)}',
     '.rpg-panel-tab:hover{background:rgba(40,40,55,0.95);color:#fff}',
     '.rpg-panel{position:relative;background:rgba(20,20,28,0.45);color:#eee;border:1px solid #3b3b48;border-radius:12px;padding:10px;display:flex;gap:10px;align-items:center;box-shadow:0 8px 24px rgba(0,0,0,0.5);backdrop-filter:blur(2px);user-select:none}',
     '.rpg-slot-container{display:flex;align-items:center;flex-shrink:0}',
@@ -1350,152 +1324,24 @@
   };
 
   // ================================================================
-  // ACTION DETECTION 2.0 — XHR/fetch/history hooks + click heuristics
-  //
-  // EAM is a SPA layered over Ext JS iframes; hashchange/popstate cover almost
-  // nothing.  APM Master's approach (install.user.js ~line 33217) is to
-  // intercept XHR/fetch and classify URLs, which we mirror here.  We hook the
-  // PAGE's XMLHttpRequest / fetch via unsafeWindow — hooking the sandboxed
-  // Tampermonkey copy would miss every real call.
-  //
-  // Signals we surface:
-  //   * EAM_API_URL_RE hits              -> nav activity  (wild spawn + 15% XP)
-  //   * PTP_START_URL_RE hits            -> +10 XP        (30s cooldown)
-  //   * WOCOMPLETE_BODY_RE in XHR body   -> +10 XP        (4s cooldown)
-  //   * click on Save/OK/Submit etc.     -> +10 XP IF status field reads Complete
-  //   * history.pushState/replaceState   -> nav activity
-  //
-  // Every path console.log's what fired so you can see it in devtools.
+  // NAV DETECTION — history + hashchange + popstate.
+  // Only surface is nav activity: rolls a wild spawn (5%) and awards
+  // +5 XP (15%), throttled by NAV_COOLDOWN_MS. No XHR/fetch hooks, no
+  // click heuristics, no URL classification.
   // ================================================================
-  const cooldown = { complete: 0, ptp: 0, nav: 0 };
+  const cooldown = { nav: 0 };
   const canFire = (k, ms) => { const now = Date.now(); if (now - cooldown[k] < ms) return false; cooldown[k] = now; return true; };
-  const textOf = (n) => ((n && (n.textContent || n.value || (n.getAttribute && n.getAttribute('aria-label')))) || '').trim().toLowerCase();
 
   const rpgRawWin = (typeof unsafeWindow !== 'undefined' && unsafeWindow) ? unsafeWindow : window;
 
-  // Rolling debug log: every URL that flows through our XHR/fetch hooks.
-  // Inspect with APM_RPG.debugDetection() from the devtools console.
-  const RPG_URL_LOG_MAX = 60;
-  const rpgUrlLog = [];       // [{ src, url, matched, ts }]
-  // Verbose defaults ON so devtools shows every URL that passes through the
-  // hooks — this is a temporary diagnostic aid while XP detection is being
-  // tuned. Switch off with `window.__apmRpgVerbose = false` in the console.
-  const rpgLogUrl = (src, url, matched) => {
-    try {
-      rpgUrlLog.push({ src: src, url: url, matched: matched, ts: Date.now() });
-      if (rpgUrlLog.length > RPG_URL_LOG_MAX) rpgUrlLog.shift();
-      const verbose = (rpgRawWin.__apmRpgVerbose !== false);   // default ON
-      if (verbose) {
-        if (matched) console.log('%c[APM RPG url]', 'color:#22c55e;font-weight:bold', src, matched, url);
-        else         console.log('[APM RPG url]', src, '(no match)', url);
-      } else if (matched) {
-        console.log('%c[APM RPG url]', 'color:#22c55e;font-weight:bold', src, matched, url);
-      }
-    } catch (e) {}
-  };
-  // Expose the log directly on the page window so it's inspectable without the
-  // bridge — the bridge is only reliable when the sandbox is fully healthy.
-  try {
-    if (typeof unsafeWindow !== 'undefined' && unsafeWindow) {
-      unsafeWindow.__apmRpgUrls = rpgUrlLog;
-    }
-  } catch (e) {}
-
   const handleNavActivity = (source) => {
     if (!canFire('nav', NAV_COOLDOWN_MS)) return;
-    console.log('[APM RPG] nav activity via', source);
     setTimeout(rollWildSpawn, 500);
     if (Math.random() < PAGE_CHANGE_XP_CHANCE) {
       grantPlayerXP(XP_REWARDS.pageChange, 'page change');
     }
   };
-  const handleWorkOrderComplete = (source) => {
-    if (!canFire('complete', COMPLETE_COOLDOWN_MS)) return;
-    console.log('[APM RPG] WO complete via', source);
-    grantPlayerXP(XP_REWARDS.completeWorkOrder, 'complete WO (' + source + ')');
-  };
-  const handlePTPCreated = (source, wo) => {
-    if (!canFire('ptp', PTP_XP_COOLDOWN_MS)) return;
-    console.log('[APM RPG] PTP created via', source, wo || '');
-    grantPlayerXP(XP_REWARDS.ptpCreated, 'PTP created');
-    handleNavActivity('ptp-created');
-  };
-  const classifyUrl = (url, from) => {
-    if (!url) return;
-    const raw = String(url);
-    const abs = resolveUrl(raw);
-    const host = hostOf(abs);
-    let matched = null;
-    // Path-based signals first (specific).
-    if (PTP_START_URL_RE.test(raw) || PTP_START_URL_RE.test(abs))         matched = 'PTP_START';
-    else if (EAM_HEARTBEAT_RE.test(raw))                                  matched = 'HEARTBEAT (ignored)';
-    else if (PTP_COMPLETE_URL_RE.test(raw) || PTP_COMPLETE_URL_RE.test(abs)) matched = 'PTP_COMPLETE';
-    else if (EAM_API_URL_RE.test(abs))                                    matched = 'EAM_API';
-    // Host-based fallback (broad).
-    else if (PTP_HOST_RE.test(host))                                      matched = 'PTP_ANY';
-    else if (EAM_HOST_RE.test(host))                                      matched = 'EAM_ANY';
-    rpgLogUrl(from || 'unknown', abs, matched);
-    if (matched === 'PTP_START')                { handlePTPCreated('xhr-url', abs); return; }
-    if (matched === 'HEARTBEAT (ignored)')      return;
-    if (matched === 'PTP_COMPLETE')             { handleNavActivity('ptp-submit'); return; }
-    if (matched === 'EAM_API' || matched === 'EAM_ANY') { handleNavActivity('eam-api'); return; }
-    if (matched === 'PTP_ANY')                  { handleNavActivity('ptp-any'); return; }
-  };
 
-  // ---- XHR hook ----
-  const installXHRHook = () => {
-    try {
-      const proto = rpgRawWin.XMLHttpRequest && rpgRawWin.XMLHttpRequest.prototype;
-      if (!proto || proto.__apmRpgHooked) return;
-      const origOpen = proto.open;
-      const origSend = proto.send;
-      proto.open = function(method, url) {
-        try { this.__apmRpgUrl = String(url || ''); } catch (e) {}
-        return origOpen.apply(this, arguments);
-      };
-      proto.send = function(body) {
-        const url = this.__apmRpgUrl || '';
-        // Body-based WO complete detection — fires only after 2xx response.
-        if (typeof body === 'string' && WOCOMPLETE_BODY_RE.test(body)) {
-          this.addEventListener('load', function () {
-            if (this.status >= 200 && this.status < 300) handleWorkOrderComplete('xhr-body');
-          }, { once: true });
-        }
-        this.addEventListener('load', () => classifyUrl(url, 'xhr'), { once: true });
-        return origSend.apply(this, arguments);
-      };
-      proto.__apmRpgHooked = true;
-      console.log('[APM RPG] XHR hook installed');
-    } catch (e) { console.warn('[APM RPG] XHR hook failed:', e && e.message); }
-  };
-
-  // ---- fetch hook ----
-  const installFetchHook = () => {
-    try {
-      if (rpgRawWin.__apmRpgFetchHooked) return;
-      const origFetch = rpgRawWin.fetch;
-      if (typeof origFetch !== 'function') return;
-      rpgRawWin.fetch = function(input, init) {
-        const url = (typeof input === 'string') ? input : (input && input.url) || '';
-        if (init && typeof init.body === 'string' && WOCOMPLETE_BODY_RE.test(init.body)) {
-          // Confirm on successful response
-          return origFetch.apply(this, arguments).then((resp) => {
-            if (resp && resp.ok) handleWorkOrderComplete('fetch-body');
-            classifyUrl(url, 'fetch');
-            return resp;
-          }, (err) => { throw err; });
-        }
-        return origFetch.apply(this, arguments).then((resp) => {
-          if (resp && resp.ok !== false) classifyUrl(url, 'fetch');
-          return resp;
-        }, (err) => { throw err; });
-      };
-      rpgRawWin.__apmRpgFetchHooked = true;
-      console.log('[APM RPG] fetch hook installed');
-    } catch (e) { console.warn('[APM RPG] fetch hook failed:', e && e.message); }
-  };
-
-  // ---- history.pushState / replaceState hook ----
   const installHistoryHook = () => {
     try {
       if (rpgRawWin.__apmRpgHistoryHooked) return;
@@ -1511,102 +1357,15 @@
         };
       }
       rpgRawWin.__apmRpgHistoryHooked = true;
-      console.log('[APM RPG] history hook installed');
-    } catch (e) { console.warn('[APM RPG] history hook failed:', e && e.message); }
-  };
-
-  // ---- WO status heuristic (for click detection) ----
-  const isWOStatusComplete = () => {
-    try {
-      const nodes = document.querySelectorAll(
-        'input[name*="workorderstatus" i], input[data-fieldname*="workorderstatus" i], ' +
-        'input[id*="workorderstatus" i], select[name*="workorderstatus" i], ' +
-        'input[name*="status" i][role="combobox"]'
-      );
-      for (const n of nodes) {
-        const v = (n.value || '').toLowerCase();
-        if (v === 'c' || v.includes('complete')) return true;
-      }
     } catch (e) {}
-    return false;
   };
 
-  // ---- click detector (broader than v1) ----
-  document.addEventListener('click', (e) => {
-    let n = e.target;
-    for (let i = 0; i < 8 && n && n !== document.body; i++, n = n.parentElement) {
-      const t = textOf(n); if (!t) continue;
-      // Direct 'complete' text (button-labelled Complete) — still count it.
-      if (/\bcomplete\b/.test(t) && !/incomplete/.test(t)) {
-        handleWorkOrderComplete('click-text');
-        return;
-      }
-      // Save/OK/etc. button — only counts when the form's status reads Complete.
-      if (SAVE_BTN_TEXT_RE.test(t) && isWOStatusComplete()) {
-        handleWorkOrderComplete('click-save+status');
-        return;
-      }
-    }
-  }, true);
-
-  // ---- history-fallback (still useful for the rare real hash change) ----
   window.addEventListener('hashchange', () => handleNavActivity('hashchange'));
   window.addEventListener('popstate',   () => handleNavActivity('popstate'));
 
-  const setupActionDetection = () => {
-    installXHRHook();
-    installFetchHook();
-    installHistoryHook();
-    // Loud startup dump so it's obvious in devtools that everything is armed.
-    const rawXHRProto = rpgRawWin.XMLHttpRequest && rpgRawWin.XMLHttpRequest.prototype;
-    console.log('%c[APM RPG] action detection wired', 'color:#22c55e;font-weight:bold', {
-      frame: {
-        isTop: (function(){ try { return window === window.top; } catch (e) { return null; } })(),
-        hostname: (function(){ try { return location.hostname; } catch (e) { return null; } })(),
-      },
-      hooks: {
-        xhrHooked: !!(rawXHRProto && rawXHRProto.__apmRpgHooked),
-        fetchHooked: !!rpgRawWin.__apmRpgFetchHooked,
-        historyHooked: !!rpgRawWin.__apmRpgHistoryHooked,
-      },
-      patterns: {
-        PTP_START: PTP_START_URL_RE.source,
-        EAM_API:   EAM_API_URL_RE.source,
-      },
-      tip: 'Every URL that flows through XHR/fetch is now logged. Look for green [APM RPG url] lines. Turn off with window.__apmRpgVerbose = false.',
-    });
-    // Also expose a diagnostic snapshot on the page window (no bridge needed).
-    try {
-      if (typeof unsafeWindow !== 'undefined' && unsafeWindow) {
-        unsafeWindow.__apmRpgDebug = () => ({
-          version: LOCAL_VERSION,
-          frame: {
-            isTop: (function(){ try { return window === window.top; } catch (e) { return null; } })(),
-            hostname: (function(){ try { return location.hostname; } catch (e) { return null; } })(),
-          },
-          hooks: {
-            xhrHooked: !!(rawXHRProto && rawXHRProto.__apmRpgHooked),
-            fetchHooked: !!rpgRawWin.__apmRpgFetchHooked,
-            historyHooked: !!rpgRawWin.__apmRpgHistoryHooked,
-          },
-          cooldowns: {
-            complete: cooldown.complete ? new Date(cooldown.complete).toISOString() : 'never',
-            ptp: cooldown.ptp ? new Date(cooldown.ptp).toISOString() : 'never',
-            nav: cooldown.nav ? new Date(cooldown.nav).toISOString() : 'never',
-          },
-          urls: rpgUrlLog.slice().reverse(),
-        });
-      }
-    } catch (e) {}
-  };
-
-  // Wire action detection immediately at document-start so we install our
-  // XHR/fetch/history hooks BEFORE page scripts can capture the originals.
-  try {
-    setupActionDetection();
-  } catch (e) {
-    console.error('[APM RPG] setupActionDetection failed at document-start:', e);
-  }
+  // Install the history hook immediately at document-start so we intercept
+  // pushState/replaceState before the page's own scripts capture history.
+  try { installHistoryHook(); } catch (e) {}
 
   // ================================================================
   // MOVEMENT HELPER — quarter-circle boundary around the bottom-right UI.
@@ -1957,59 +1716,6 @@
       cacheIntervalMs: UPDATE_CHECK_INTERVAL_MS
     }),
     clearUpdateCache: () => { updateInfo.checkedAt = 0; updateInfo.latest = null; updateInfo.available = false; saveUpdateCache(); return 'cleared'; },
-
-    // Detection debug helpers
-    debugDetection: () => {
-      const rawXHRProto = rpgRawWin.XMLHttpRequest && rpgRawWin.XMLHttpRequest.prototype;
-      return {
-        version: LOCAL_VERSION,
-        frame: {
-          isTop: (function(){ try { return window === window.top; } catch (e) { return null; } })(),
-          hostname: (function(){ try { return location.hostname; } catch (e) { return null; } })(),
-          href: (function(){ try { return location.href; } catch (e) { return null; } })(),
-          hasUnsafeWindow: typeof unsafeWindow !== 'undefined',
-          rawWinSameAsWindow: rpgRawWin === window,
-        },
-        hooks: {
-          xhrHooked: !!(rawXHRProto && rawXHRProto.__apmRpgHooked),
-          fetchHooked: !!rpgRawWin.__apmRpgFetchHooked,
-          historyHooked: !!rpgRawWin.__apmRpgHistoryHooked,
-        },
-        cooldowns: {
-          complete: cooldown.complete ? new Date(cooldown.complete).toISOString() : 'never',
-          ptp: cooldown.ptp ? new Date(cooldown.ptp).toISOString() : 'never',
-          nav: cooldown.nav ? new Date(cooldown.nav).toISOString() : 'never',
-        },
-        patterns: {
-          PTP_START: PTP_START_URL_RE.source,
-          PTP_COMPLETE: PTP_COMPLETE_URL_RE.source,
-          EAM_API: EAM_API_URL_RE.source,
-          EAM_HEARTBEAT: EAM_HEARTBEAT_RE.source,
-          WOCOMPLETE_BODY: WOCOMPLETE_BODY_RE.source,
-        },
-        recentUrls: rpgUrlLog.slice().reverse(),
-        recentUrlCount: rpgUrlLog.length,
-        verbose: rpgVerbose,
-      };
-    },
-    setVerbose: (on) => { rpgVerbose = on !== false; return 'verbose ' + (rpgVerbose ? 'ON — every URL will log' : 'OFF'); },
-    testUrl: (url) => {
-      const before = { ptp: cooldown.ptp, nav: cooldown.nav };
-      const results = {
-        matches: {
-          PTP_START: PTP_START_URL_RE.test(url),
-          PTP_COMPLETE: PTP_COMPLETE_URL_RE.test(url),
-          EAM_API: EAM_API_URL_RE.test(url),
-          EAM_HEARTBEAT: EAM_HEARTBEAT_RE.test(url),
-          WOCOMPLETE_BODY: WOCOMPLETE_BODY_RE.test(url),
-        }
-      };
-      classifyUrl(url, 'testUrl');
-      results.firedPTP = cooldown.ptp !== before.ptp;
-      results.firedNav = cooldown.nav !== before.nav;
-      return results;
-    },
-    forceHook: () => { installXHRHook(); installFetchHook(); installHistoryHook(); return 'reinstalled'; },
   };
   // Sandbox-context handle (works from Tampermonkey's isolated context).
   window.APM_RPG = APM_RPG_API;
@@ -2017,7 +1723,7 @@
   // Page-context bridge: Chrome's isolated worlds silently block cross-context
   // property writes via unsafeWindow, so instead we inject a proxy into the page
   // and communicate via postMessage. Methods become async on the page side.
-  const APM_RPG_METHODS = ['grantXP','setLevel','spawn','spawnVariant','rollSpawn','despawn','detect','setUsername','reset','checkUpdate','updateInfo','debugUpdate','clearUpdateCache','debugDetection','setVerbose','testUrl','forceHook'];
+  const APM_RPG_METHODS = ['grantXP','setLevel','spawn','spawnVariant','rollSpawn','despawn','detect','setUsername','reset','checkUpdate','updateInfo','debugUpdate','clearUpdateCache'];
 
   window.addEventListener('message', async (e) => {
     if (e.source !== window || !e.data || e.data.__apm_rpg !== 'call') return;
