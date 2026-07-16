@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      1.0.4
+// @version      1.0.5
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -1706,7 +1706,7 @@
     wildEl.style.top  = Math.floor(wInit.y) + 'px';
     document.body.appendChild(wildEl);
     requestAnimationFrame(() => requestAnimationFrame(moveWild));
-    wildRoamTimer = setInterval(moveWild, 8000);
+    wildRoamTimer = setInterval(moveWild, 3000);
     vlog('[APM RPG] Wild ' + (special ? (variantLabel(wildVariant).toUpperCase() + ' ') : '') + wildPet.name + ' appeared!');
   };
 
