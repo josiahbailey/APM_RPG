@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      1.0.1
+// @version      1.0.2
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -93,8 +93,8 @@
   // Active pet slots — `unlockLevel` gates each one.
   const PET_SLOTS = [
     { unlockLevel: 1 },
+    { unlockLevel: 5 },
     { unlockLevel: 10 },
-    { unlockLevel: 20 },
   ];
 
   // 26 pets total. catchBaseRate + spawnWeight are derived from RARITY_META below.
