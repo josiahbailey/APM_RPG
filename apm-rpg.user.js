@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.7.46
+// @version      0.7.47
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -847,6 +847,17 @@
     '.rpg-dex-card .c{font-size:9px;color:#aaa;margin-top:2px;line-height:1.2}',
     '.rpg-dex-card.rpg-dex-silhouette img{filter:brightness(0) opacity(0.35)}',
     '.rpg-dex-card.rpg-dex-silhouette .n{color:#555}',
+    '.rpg-dex-count{text-align:center;font-size:14px;color:#ffd166;margin:-4px 0 12px;font-weight:600;letter-spacing:0.8px}',
+    '.rpg-release-prompt{position:fixed;z-index:2147483500;background:rgba(20,20,28,0.98);border:1.5px solid #dc2626;border-radius:8px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,0.7);min-width:200px;transform:translate(-50%,-100%);color:#eee;font-size:12px;animation:rpgReleaseFadeIn 140ms ease-out;backdrop-filter:blur(3px)}',
+    '.rpg-release-prompt .t{font-weight:700;margin-bottom:2px;color:#fef2f2}',
+    '.rpg-release-prompt .w{color:#a3a3a3;font-size:10px;margin-bottom:10px}',
+    '.rpg-release-prompt .b{display:flex;gap:6px;justify-content:flex-end}',
+    '.rpg-release-prompt button{padding:4px 12px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:700;border:1px solid;letter-spacing:0.3px}',
+    '.rpg-release-prompt .cancel{background:#2a2a36;color:#ccc;border-color:#444}',
+    '.rpg-release-prompt .cancel:hover{background:#3a3a48;color:#fff}',
+    '.rpg-release-prompt .confirm{background:#dc2626;color:#fff;border-color:#b91c1c}',
+    '.rpg-release-prompt .confirm:hover{background:#ef4444}',
+    '@keyframes rpgReleaseFadeIn{from{opacity:0;transform:translate(-50%,calc(-100% + 8px))}to{opacity:1;transform:translate(-50%,-100%)}}',
     // ── Catch celebration effects ────────────────────────────────
     '.rpg-particle{position:fixed;width:8px;height:8px;border-radius:50%;pointer-events:none;z-index:2147483500;box-shadow:0 0 4px currentColor;transform:translate(-50%,-50%);animation-name:rpgParticleFly;animation-timing-function:cubic-bezier(0.15,0.7,0.4,1);animation-fill-mode:forwards}',
     '@keyframes rpgParticleFly{0%{transform:translate(-50%,-50%) scale(1);opacity:1}70%{opacity:0.9}100%{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(0.2);opacity:0}}',
@@ -1056,6 +1067,45 @@
   const closeMenu = () => { if (menuEl) { menuEl.remove(); menuEl = null; } };
   const setupMenuDismiss = () => { setTimeout(() => { const off = (e) => { if (menuEl && !menuEl.contains(e.target) && !el.panel.contains(e.target)) { closeMenu(); document.removeEventListener('mousedown', off); } }; document.addEventListener('mousedown', off); }, 50); };
 
+  // Custom release confirmation, positioned at the mouse cursor. Replaces the
+  // synchronous browser confirm() with a floating tooltip. Returns Promise<bool>.
+  const showReleasePrompt = (name, mouseX, mouseY) => {
+    return new Promise((resolve) => {
+      const p = $('div', {
+        class: 'rpg-release-prompt',
+        style: { left: mouseX + 'px', top: (mouseY - 8) + 'px' },
+        onmousedown: (e) => e.stopPropagation(),
+      });
+      p.appendChild($('div', { class: 't', html: 'Release ' + name + '?' }));
+      p.appendChild($('div', { class: 'w', html: 'This cannot be undone.' }));
+      const row = $('div', { class: 'b' });
+      const cleanup = (result) => {
+        document.removeEventListener('mousedown', outside, true);
+        window.removeEventListener('keydown', onKey, true);
+        if (p.parentNode) p.remove();
+        resolve(result);
+      };
+      const outside = (e) => { if (!p.contains(e.target)) cleanup(false); };
+      const onKey = (e) => { if (e.key === 'Escape') cleanup(false); };
+      row.appendChild($('button', { class: 'cancel', html: 'Cancel', onclick: (e) => { e.stopPropagation(); cleanup(false); } }));
+      row.appendChild($('button', { class: 'confirm', html: 'Release', onclick: (e) => { e.stopPropagation(); cleanup(true); } }));
+      p.appendChild(row);
+      // Attach to menuEl if present so menu-dismiss ignores clicks inside the
+      // prompt; otherwise attach to body.
+      const parent = (typeof menuEl !== 'undefined' && menuEl) ? menuEl : document.body;
+      parent.appendChild(p);
+      // Nudge into viewport if the fixed-position prompt clipped past edges.
+      const r = p.getBoundingClientRect();
+      let dx = 0, dy = 0;
+      if (r.left < 8) dx = 8 - r.left;
+      if (r.right > window.innerWidth - 8) dx = (window.innerWidth - 8) - r.right;
+      if (r.top < 8) dy = 8 - r.top;
+      if (dx || dy) p.style.transform = 'translate(calc(-50% + ' + dx + 'px), calc(-100% + ' + dy + 'px))';
+      setTimeout(() => document.addEventListener('mousedown', outside, true), 0);
+      window.addEventListener('keydown', onKey, true);
+    });
+  };
+
   const openMenu = (kind, slotIdx) => {
     closeMenu();
     menuEl = $('div', { class: 'rpg-menu' });
@@ -1171,10 +1221,11 @@
           class: 'rpg-menu-del',
           html: '\u00D7',
           title: 'Release ' + p.name,
-          onclick: (e) => {
+          onclick: async (e) => {
             e.stopPropagation();
             const labelName = (v !== 'normal' ? variantLabel(v) + ' ' : '') + p.name;
-            if (!confirm('Release ' + labelName + '? This cannot be undone.')) return;
+            const confirmed = await showReleasePrompt(labelName, e.clientX, e.clientY);
+            if (!confirmed) return;
             state.collection = state.collection.filter(x => x.instanceId !== inst.instanceId);
             for (let s = 0; s < state.equip.petInstanceIds.length; s++) {
               if (state.equip.petInstanceIds[s] === inst.instanceId) state.equip.petInstanceIds[s] = null;
@@ -1204,9 +1255,14 @@
   // DEX MODAL
   // ================================================================
   const openDex = () => {
+    // Guard: only one dex open at a time.
+    if (document.querySelector('.rpg-dex')) return;
     const m = $('div', { class: 'rpg-modal', onclick: (e) => { if (e.target === m) m.remove(); } });
     const inner = $('div', { class: 'rpg-modal-inner rpg-dex' });
-    inner.appendChild($('h3', { html: 'PET DEX', style: { margin: '0 0 12px', color: 'gold' } }));
+    inner.appendChild($('h3', { html: 'PET DEX', style: { margin: '0 0 6px', color: 'gold' } }));
+    // Species counter (unique petIds seen, regardless of variant).
+    const speciesSeen = new Set(state.collection.map(i => i.petId)).size;
+    inner.appendChild($('div', { class: 'rpg-dex-count', html: speciesSeen + ' / ' + PETS.length }));
     const grid = $('div', { class: 'rpg-dex-grid' });
     for (const p of PETS) {
       const nCount = state.collection.filter(i => i.petId === p.id && variantOf(i) === 'normal').length;
