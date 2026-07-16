@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      1.0.2
+// @version      1.0.3
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -50,28 +50,22 @@
   const IMG_BASE = 'https://raw.githubusercontent.com/josiahbailey/APM_RPG/main';
 
   // Character portraits. `level` = minimum player level required to unlock.
+  // First 3 are Lv 1 starters; the rest step up by 2 levels each (3, 5, 7, ...).
   const CHARACTERS = [
-    // Level 1 — 3 starter portraits
     { id: 'ch_01', img: IMG_BASE + '/Character_Images/Character_1.png',  level: 1 },
     { id: 'ch_02', img: IMG_BASE + '/Character_Images/Character_2.png',  level: 1 },
     { id: 'ch_03', img: IMG_BASE + '/Character_Images/Character_3.png',  level: 1 },
-    // Level 5 — 3 portraits
-    { id: 'ch_04', img: IMG_BASE + '/Character_Images/Character_4.png',  level: 5 },
+    { id: 'ch_04', img: IMG_BASE + '/Character_Images/Character_4.png',  level: 3 },
     { id: 'ch_05', img: IMG_BASE + '/Character_Images/Character_5.png',  level: 5 },
-    { id: 'ch_06', img: IMG_BASE + '/Character_Images/Character_6.png',  level: 5 },
-    // Level 10 — 2 portraits
-    { id: 'ch_07', img: IMG_BASE + '/Character_Images/Character_7.png',  level: 10 },
-    { id: 'ch_08', img: IMG_BASE + '/Character_Images/Character_8.png',  level: 10 },
-    // Level 15 — 2 portraits
-    { id: 'ch_09', img: IMG_BASE + '/Character_Images/Character_9.png',  level: 15 },
+    { id: 'ch_06', img: IMG_BASE + '/Character_Images/Character_6.png',  level: 7 },
+    { id: 'ch_07', img: IMG_BASE + '/Character_Images/Character_7.png',  level: 9 },
+    { id: 'ch_08', img: IMG_BASE + '/Character_Images/Character_8.png',  level: 11 },
+    { id: 'ch_09', img: IMG_BASE + '/Character_Images/Character_9.png',  level: 13 },
     { id: 'ch_10', img: IMG_BASE + '/Character_Images/Character_10.png', level: 15 },
-    // Level 20 — 2 portraits
-    { id: 'ch_11', img: IMG_BASE + '/Character_Images/Character_11.png', level: 20 },
-    { id: 'ch_12', img: IMG_BASE + '/Character_Images/Character_12.png', level: 20 },
-    // Level 25 — 1 portrait
-    { id: 'ch_13', img: IMG_BASE + '/Character_Images/Character_13.png', level: 25 },
-    // Level 30 — 1 portrait
-    { id: 'ch_14', img: IMG_BASE + '/Character_Images/Character_14.png', level: 30 },
+    { id: 'ch_11', img: IMG_BASE + '/Character_Images/Character_11.png', level: 17 },
+    { id: 'ch_12', img: IMG_BASE + '/Character_Images/Character_12.png', level: 19 },
+    { id: 'ch_13', img: IMG_BASE + '/Character_Images/Character_13.png', level: 21 },
+    { id: 'ch_14', img: IMG_BASE + '/Character_Images/Character_14.png', level: 23 },
   ];
 
   // Banner backgrounds. First entry is 'no banner' (unlocked by default).
