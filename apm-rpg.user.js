@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      0.7.47
+// @version      1.0.0
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -46,45 +46,48 @@
   };
   const RARITY_ORDER = ['Common', 'Rare', 'Epic', 'Legendary', 'Ancient'];
 
+  // Asset base — images live in the repo alongside this script.
+  const IMG_BASE = 'https://raw.githubusercontent.com/josiahbailey/APM_RPG/main';
+
   // Character portraits. `level` = minimum player level required to unlock.
   const CHARACTERS = [
     // Level 1 — 3 starter portraits
-    { id: 'ch_01', img: 'https://placehold.co/128x128/3b82f6/ffffff?text=1',  level: 1 },
-    { id: 'ch_02', img: 'https://placehold.co/128x128/a855f7/ffffff?text=2',  level: 1 },
-    { id: 'ch_03', img: 'https://placehold.co/128x128/22c55e/ffffff?text=3',  level: 1 },
+    { id: 'ch_01', img: IMG_BASE + '/Character_Images/Character_1.png',  level: 1 },
+    { id: 'ch_02', img: IMG_BASE + '/Character_Images/Character_2.png',  level: 1 },
+    { id: 'ch_03', img: IMG_BASE + '/Character_Images/Character_3.png',  level: 1 },
     // Level 5 — 3 portraits
-    { id: 'ch_04', img: 'https://placehold.co/128x128/f97316/ffffff?text=4',  level: 5 },
-    { id: 'ch_05', img: 'https://placehold.co/128x128/ec4899/ffffff?text=5',  level: 5 },
-    { id: 'ch_06', img: 'https://placehold.co/128x128/14b8a6/ffffff?text=6',  level: 5 },
+    { id: 'ch_04', img: IMG_BASE + '/Character_Images/Character_4.png',  level: 5 },
+    { id: 'ch_05', img: IMG_BASE + '/Character_Images/Character_5.png',  level: 5 },
+    { id: 'ch_06', img: IMG_BASE + '/Character_Images/Character_6.png',  level: 5 },
     // Level 10 — 2 portraits
-    { id: 'ch_07', img: 'https://placehold.co/128x128/eab308/1a1a1a?text=7',  level: 10 },
-    { id: 'ch_08', img: 'https://placehold.co/128x128/4f46e5/ffffff?text=8',  level: 10 },
+    { id: 'ch_07', img: IMG_BASE + '/Character_Images/Character_7.png',  level: 10 },
+    { id: 'ch_08', img: IMG_BASE + '/Character_Images/Character_8.png',  level: 10 },
     // Level 15 — 2 portraits
-    { id: 'ch_09', img: 'https://placehold.co/128x128/84cc16/1a1a1a?text=9',  level: 15 },
-    { id: 'ch_10', img: 'https://placehold.co/128x128/f43f5e/ffffff?text=10', level: 15 },
+    { id: 'ch_09', img: IMG_BASE + '/Character_Images/Character_9.png',  level: 15 },
+    { id: 'ch_10', img: IMG_BASE + '/Character_Images/Character_10.png', level: 15 },
     // Level 20 — 2 portraits
-    { id: 'ch_11', img: 'https://placehold.co/128x128/64748b/ffffff?text=11', level: 20 },
-    { id: 'ch_12', img: 'https://placehold.co/128x128/d97706/ffffff?text=12', level: 20 },
+    { id: 'ch_11', img: IMG_BASE + '/Character_Images/Character_11.png', level: 20 },
+    { id: 'ch_12', img: IMG_BASE + '/Character_Images/Character_12.png', level: 20 },
     // Level 25 — 1 portrait
-    { id: 'ch_13', img: 'https://placehold.co/128x128/8b5cf6/ffffff?text=13', level: 25 },
+    { id: 'ch_13', img: IMG_BASE + '/Character_Images/Character_13.png', level: 25 },
     // Level 30 — 1 portrait
-    { id: 'ch_14', img: 'https://placehold.co/128x128/ef4444/ffffff?text=14', level: 30 },
+    { id: 'ch_14', img: IMG_BASE + '/Character_Images/Character_14.png', level: 30 },
   ];
 
   // Banner backgrounds. First entry is 'no banner' (unlocked by default).
   // One new banner every 3 levels up to 30.
   const BANNERS = [
-    { id: 'bn_none',      img: null,                                                                           level: 1 },
-    { id: 'bn_forest',    img: 'https://placehold.co/600x120/166534/ffffff?text=Forest',                       level: 3 },
-    { id: 'bn_desert',    img: 'https://placehold.co/600x120/b45309/ffffff?text=Desert',                       level: 6 },
-    { id: 'bn_snow',      img: 'https://placehold.co/600x120/e0e7ff/1a1a1a?text=Snow',                         level: 9 },
-    { id: 'bn_nightsky',  img: 'https://placehold.co/600x120/1e3a8a/ffffff?text=Nightsky',                     level: 12 },
-    { id: 'bn_volcano',   img: 'https://placehold.co/600x120/991b1b/ffffff?text=Volcano',                      level: 15 },
-    { id: 'bn_ocean',     img: 'https://placehold.co/600x120/0e7490/ffffff?text=Ocean',                        level: 18 },
-    { id: 'bn_meadow',    img: 'https://placehold.co/600x120/65a30d/1a1a1a?text=Meadow',                       level: 21 },
-    { id: 'bn_void',      img: 'https://placehold.co/600x120/111111/f8fafc?text=Void',                         level: 24 },
-    { id: 'bn_gold',      img: 'https://placehold.co/600x120/facc15/1a1a1a?text=Gold',                         level: 27 },
-    { id: 'bn_prismatic', img: 'https://placehold.co/600x120/8b5cf6/ffffff?text=Prismatic',                    level: 30 },
+    { id: 'bn_none',      img: null,                                        level: 1 },
+    { id: 'bn_forest',    img: IMG_BASE + '/Banner_Images/Banner_1.png',    level: 3 },
+    { id: 'bn_desert',    img: IMG_BASE + '/Banner_Images/Banner_2.png',    level: 6 },
+    { id: 'bn_snow',      img: IMG_BASE + '/Banner_Images/Banner_3.png',    level: 9 },
+    { id: 'bn_nightsky',  img: IMG_BASE + '/Banner_Images/Banner_4.png',    level: 12 },
+    { id: 'bn_volcano',   img: IMG_BASE + '/Banner_Images/Banner_5.png',    level: 15 },
+    { id: 'bn_ocean',     img: IMG_BASE + '/Banner_Images/Banner_6.png',    level: 18 },
+    { id: 'bn_meadow',    img: IMG_BASE + '/Banner_Images/Banner_7.png',    level: 21 },
+    { id: 'bn_void',      img: IMG_BASE + '/Banner_Images/Banner_8.png',    level: 24 },
+    { id: 'bn_gold',      img: IMG_BASE + '/Banner_Images/Banner_9.png',    level: 27 },
+    { id: 'bn_prismatic', img: IMG_BASE + '/Banner_Images/Banner_10.png',   level: 30 },
   ];
 
   // Active pet slots — `unlockLevel` gates each one.
@@ -94,29 +97,43 @@
     { unlockLevel: 20 },
   ];
 
-  // 15 pets, 3 per rarity. catchBaseRate + spawnWeight are derived from RARITY_META below.
+  // 26 pets total. catchBaseRate + spawnWeight are derived from RARITY_META below.
+  //   Common (10), Rare (6), Epic (4), Legendary (4), Ancient (2)
   const PETS = [
-    // ── Common (3, starters) ────────────────────────────────────
-    { id: 'pt_slime',    name: 'Slime',    rarity: 'Common',    img: 'https://placehold.co/96x96/84cc16/1a1a1a?text=Slime'   },
-    { id: 'pt_sparrow',  name: 'Sparrow',  rarity: 'Common',    img: 'https://placehold.co/96x96/a16207/ffffff?text=Sparrow' },
-    { id: 'pt_cub',      name: 'Cub',      rarity: 'Common',    img: 'https://placehold.co/96x96/d97706/1a1a1a?text=Cub'     },
-    // ── Rare (3) ─────────────────────────────────────────────────
-    { id: 'pt_fox',      name: 'Fox',      rarity: 'Rare',      img: 'https://placehold.co/96x96/f97316/ffffff?text=Fox'     },
-    { id: 'pt_owl',      name: 'Owl',      rarity: 'Rare',      img: 'https://placehold.co/96x96/78350f/ffffff?text=Owl'     },
-    { id: 'pt_toad',     name: 'Toad',     rarity: 'Rare',      img: 'https://placehold.co/96x96/166534/ffffff?text=Toad'    },
-    // ── Epic (3) ─────────────────────────────────────────────────
-    { id: 'pt_wolf',     name: 'Wolf',     rarity: 'Epic',      img: 'https://placehold.co/96x96/71717a/ffffff?text=Wolf'    },
-    { id: 'pt_falcon',   name: 'Falcon',   rarity: 'Epic',      img: 'https://placehold.co/96x96/0284c7/ffffff?text=Falcon'  },
-    { id: 'pt_serpent',  name: 'Serpent',  rarity: 'Epic',      img: 'https://placehold.co/96x96/365314/ffffff?text=Serpent' },
-    // ── Legendary (3) ────────────────────────────────────────────
-    { id: 'pt_griffon',  name: 'Griffon',  rarity: 'Legendary', img: 'https://placehold.co/96x96/eab308/1a1a1a?text=Griffon' },
-    { id: 'pt_kraken',   name: 'Kraken',   rarity: 'Legendary', img: 'https://placehold.co/96x96/1e3a8a/ffffff?text=Kraken'  },
-    { id: 'pt_chimera',  name: 'Chimera',  rarity: 'Legendary', img: 'https://placehold.co/96x96/dc2626/ffffff?text=Chimera' },
-    // ── Ancient (3) ──────────────────────────────────────────────
-    { id: 'pt_dragon',   name: 'Dragonet', rarity: 'Ancient',   img: 'https://placehold.co/96x96/ef4444/ffffff?text=Dragon'  },
-    { id: 'pt_phoenix',  name: 'Phoenix',  rarity: 'Ancient',   img: 'https://placehold.co/96x96/b91c1c/ffffff?text=Phoenix' },
-    { id: 'pt_titan',    name: 'Titan',    rarity: 'Ancient',   img: 'https://placehold.co/96x96/44403c/f5f5f5?text=Titan'   },
+    // ── Common (10) ─────────────────────────────────────────────
+    { id: 'pt_bagroc',    name: 'Bagroc',    rarity: 'Common',    img: IMG_BASE + '/Pet_Images/Common/Bagroc.png'   },
+    { id: 'pt_fasfox',    name: 'Fasfox',    rarity: 'Common',    img: IMG_BASE + '/Pet_Images/Common/Fasfox.png'   },
+    { id: 'pt_icedro',    name: 'Icedro',    rarity: 'Common',    img: IMG_BASE + '/Pet_Images/Common/Icedro.png'   },
+    { id: 'pt_mossmo',    name: 'Mossmo',    rarity: 'Common',    img: IMG_BASE + '/Pet_Images/Common/Mossmo.png'   },
+    { id: 'pt_oinky',     name: 'Oinky',     rarity: 'Common',    img: IMG_BASE + '/Pet_Images/Common/Oinky.png'    },
+    { id: 'pt_ribub',     name: 'Ribub',     rarity: 'Common',    img: IMG_BASE + '/Pet_Images/Common/Ribub.png'    },
+    { id: 'pt_sanda',     name: 'Sanda',     rarity: 'Common',    img: IMG_BASE + '/Pet_Images/Common/Sanda.png'    },
+    { id: 'pt_sizzlo',    name: 'Sizzlo',    rarity: 'Common',    img: IMG_BASE + '/Pet_Images/Common/Sizzlo.png'   },
+    { id: 'pt_sunbun',    name: 'Sunbun',    rarity: 'Common',    img: IMG_BASE + '/Pet_Images/Common/Sunbun.png'   },
+    { id: 'pt_windro',    name: 'Windro',    rarity: 'Common',    img: IMG_BASE + '/Pet_Images/Common/Windro.png'   },
+    // ── Rare (6) ────────────────────────────────────────────────
+    { id: 'pt_crystela',  name: 'Crystela',  rarity: 'Rare',      img: IMG_BASE + '/Pet_Images/Rare/Crystela.png'   },
+    { id: 'pt_geckleaf',  name: 'Geckleaf',  rarity: 'Rare',      img: IMG_BASE + '/Pet_Images/Rare/Geckleaf.png'   },
+    { id: 'pt_ironant',   name: 'Ironant',   rarity: 'Rare',      img: IMG_BASE + '/Pet_Images/Rare/Ironant.png'    },
+    { id: 'pt_sparkeo',   name: 'Sparkeo',   rarity: 'Rare',      img: IMG_BASE + '/Pet_Images/Rare/Sparkeo.png'    },
+    { id: 'pt_stingdro',  name: 'Stingdro',  rarity: 'Rare',      img: IMG_BASE + '/Pet_Images/Rare/Stingdro.png'   },
+    { id: 'pt_wolverice', name: 'Wolverice', rarity: 'Rare',      img: IMG_BASE + '/Pet_Images/Rare/Wolverice.png'  },
+    // ── Epic (4) ────────────────────────────────────────────────
+    { id: 'pt_blazlynx',  name: 'Blazlynx',  rarity: 'Epic',      img: IMG_BASE + '/Pet_Images/Epic/Blazlynx.png'   },
+    { id: 'pt_electral',  name: 'Electral',  rarity: 'Epic',      img: IMG_BASE + '/Pet_Images/Epic/Electral.png'   },
+    { id: 'pt_swifteer',  name: 'Swifteer',  rarity: 'Epic',      img: IMG_BASE + '/Pet_Images/Epic/Swifteer.png'   },
+    { id: 'pt_venoma',    name: 'Venoma',    rarity: 'Epic',      img: IMG_BASE + '/Pet_Images/Epic/Venoma.png'     },
+    // ── Legendary (4) ───────────────────────────────────────────
+    { id: 'pt_flamdro',   name: 'Flamdro',   rarity: 'Legendary', img: IMG_BASE + '/Pet_Images/Legendary/Flamdro.png'  },
+    { id: 'pt_shamera',   name: 'Shamera',   rarity: 'Legendary', img: IMG_BASE + '/Pet_Images/Legendary/Shamera.png'  },
+    { id: 'pt_trenant',   name: 'Trenant',   rarity: 'Legendary', img: IMG_BASE + '/Pet_Images/Legendary/Trenant.png'  },
+    { id: 'pt_wyrmra',    name: 'Wyrmra',    rarity: 'Legendary', img: IMG_BASE + '/Pet_Images/Legendary/Wyrmra.png'   },
+    // ── Ancient (2) ─────────────────────────────────────────────
+    { id: 'pt_galactal',  name: 'Galactal',  rarity: 'Ancient',   img: IMG_BASE + '/Pet_Images/Ancient/Galactal.png'   },
+    { id: 'pt_thundra',   name: 'Thundra',   rarity: 'Ancient',   img: IMG_BASE + '/Pet_Images/Ancient/Thundra.png'    },
   ];
+  // Starter pool — offered in the starter picker modal.
+  const STARTER_IDS = ['pt_mossmo', 'pt_sizzlo', 'pt_icedro'];
   // Derive numeric stats from RARITY_META so we have one source of truth.
   for (const pet of PETS) {
     const m = RARITY_META[pet.rarity];
@@ -1770,7 +1787,7 @@
     inner.appendChild($('h3', { html: 'CHOOSE YOUR STARTER', style: { margin: '0 0 4px', color: '#ffd166' } }));
     inner.appendChild($('div', { html: 'Pick one pet to begin your journey. You can catch the others in the wild.', style: { fontSize: '12px', color: '#aaa', marginBottom: '16px' } }));
     const choices = $('div', { class: 'rpg-starter-choices' });
-    for (const p of PETS.slice(0, 3)) {
+    for (const p of STARTER_IDS.map(id => PETS.find(pt => pt.id === id)).filter(Boolean)) {
       const card = $('div', {
         class: 'rpg-starter-card',
         title: p.rarity + ' \u00B7 base catch ' + Math.round((p.catchBaseRate || 0) * 100) + '%',
