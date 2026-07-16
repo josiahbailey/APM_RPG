@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      1.0.3
+// @version      1.0.4
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -29,6 +29,13 @@
   // DEV MODE - when true: no data persists; clean slate each page load.
   // ================================================================
   const DEV_MODE = false;
+
+  // ================================================================
+  // VERBOSE LOGGING - flip to true (or call __apmRpgSetVerbose(true))
+  // to see every nav-detect / XP grant / update-check chatter.
+  // ================================================================
+  let VERBOSE = false;
+  const vlog = function() { if (!VERBOSE) return; try { console.log.apply(console, arguments); } catch (e) {} };
 
   // ================================================================
   // CONFIG
@@ -221,6 +228,7 @@
     version: 'apm_rpg_version', player: 'apm_rpg_player_v2',
     collection: 'apm_rpg_collection_v2', equip: 'apm_rpg_equip_v2',
     starter: 'apm_rpg_starter_granted',
+    howto: 'apm_rpg_howto_seen',
     installedVersion: 'apm_rpg_installed_version_v1',
     v1_player: 'apm_rpg_player_v1', v1_pets: 'apm_rpg_pets_v1', v1_equip: 'apm_rpg_equip_v1',
   };
@@ -319,7 +327,7 @@
       } else if (cmpVersion(parsed, LOCAL_VERSION) > 0) {
         updateInfo.newerLocalVersion = parsed;
         if (prev !== parsed) {
-          console.log('[APM RPG] a newer version (' + parsed + ') is installed; reload to activate');
+          vlog('[APM RPG] a newer version (' + parsed + ') is installed; reload to activate');
         }
       } else {
         updateInfo.newerLocalVersion = null;
@@ -332,7 +340,7 @@
 
   const setupMultiTabSync = () => {
     if (typeof GM_addValueChangeListener === 'undefined') {
-      console.log('[APM RPG] multi-tab sync unavailable (GM_addValueChangeListener not granted)');
+      vlog('[APM RPG] multi-tab sync unavailable (GM_addValueChangeListener not granted)');
       return;
     }
     const onRemote = (name, oldRaw, newRaw, remote) => {
@@ -366,12 +374,12 @@
         const v = newRaw ? JSON.parse(newRaw) : null;
         if (v && cmpVersion(v, LOCAL_VERSION) > 0) {
           updateInfo.newerLocalVersion = v;
-          console.log('[APM RPG] newer version installed remotely: v' + v);
+          vlog('[APM RPG] newer version installed remotely: v' + v);
           if (typeof renderPanel === 'function') renderPanel();
         }
       } catch (e) {}
     });
-    console.log('[APM RPG] multi-tab sync active');
+    vlog('[APM RPG] multi-tab sync active');
   };
 
   // Ensure equip has v3 shape even if a stale object was loaded
@@ -438,11 +446,11 @@
   const RELOAD_URL = 'https://us1.eam.hxgnsmartcloud.com/web/base/logindisp?tenant=AMAZONRMENA_PRD';
   const safeReload = () => {
     if (typeof window !== 'undefined' && window.__apmRpgRedirecting) {
-      console.log('[APM RPG] safeReload: already redirecting, skipping');
+      vlog('[APM RPG] safeReload: already redirecting, skipping');
       return;
     }
     try { window.__apmRpgRedirecting = true; } catch (e) {}
-    console.log('[APM RPG] safeReload -> ' + RELOAD_URL);
+    vlog('[APM RPG] safeReload -> ' + RELOAD_URL);
 
     // Best pointer to the raw page window — bypasses Tampermonkey's proxy.
     const rawWin = (typeof unsafeWindow !== 'undefined' && unsafeWindow) ? unsafeWindow : null;
@@ -527,11 +535,11 @@
     const now = Date.now();
     if (!force && (now - updateInfo.checkedAt) < UPDATE_CHECK_INTERVAL_MS) {
       const ageMin = Math.round((now - updateInfo.checkedAt) / 60000);
-      console.log('[APM RPG] update check rate-limited (last check ' + ageMin + ' min ago); use APM_RPG.checkUpdate() to force');
+      vlog('[APM RPG] update check rate-limited (last check ' + ageMin + ' min ago); use APM_RPG.checkUpdate() to force');
       return resolve({ skipped: 'rate-limit', local: LOCAL_VERSION, latest: updateInfo.latest, available: updateInfo.available });
     }
     try {
-      console.log('[APM RPG] checking for update...');
+      vlog('[APM RPG] checking for update...');
       GM_xmlhttpRequest({
         method: 'GET',
         url: UPDATE_META_URL + (UPDATE_META_URL.indexOf('?') === -1 ? '?' : '&') + '_=' + now,
@@ -551,7 +559,7 @@
           updateInfo.available = cmpVersion(updateInfo.latest, LOCAL_VERSION) > 0;
           saveUpdateCache();
           if (typeof renderPanel === 'function') renderPanel();
-          console.log('[APM RPG] update check: local=' + LOCAL_VERSION + ' latest=' + updateInfo.latest + ' available=' + updateInfo.available);
+          vlog('[APM RPG] update check: local=' + LOCAL_VERSION + ' latest=' + updateInfo.latest + ' available=' + updateInfo.available);
           resolve({ local: LOCAL_VERSION, latest: updateInfo.latest, available: updateInfo.available });
         },
         onerror: (e) => {
@@ -702,7 +710,7 @@
         state.player.username = alias;
         persistPlayer();
         if (typeof renderPanel === 'function') renderPanel();
-        console.log('[APM RPG] username set from subframe:', alias);
+        vlog('[APM RPG] username set from subframe:', alias);
       }
     } catch (err) {}
   });
@@ -819,6 +827,11 @@
     '.rpg-menu-del{position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;background:rgba(220,38,38,0.75);color:#fff;font-size:13px;font-weight:900;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:3;line-height:1;transition:transform 120ms,background 120ms;opacity:0.7}.rpg-menu-del:hover{background:#dc2626;transform:scale(1.15);opacity:1}',
     '.rpg-menu-item{position:relative}',
     '.rpg-starter-modal .rpg-modal-inner{max-width:460px}',
+    '.rpg-howto-modal .rpg-modal-inner{max-width:460px;text-align:center}',
+    '.rpg-howto-body{font-size:13px;color:#ddd;line-height:1.55;margin:8px 4px 18px;text-align:left}',
+    '.rpg-howto-body b{color:#ffd166}',
+    '.rpg-howto-btn{background:linear-gradient(180deg,#ffd166,#e5a935);color:#1a1a24;border:0;border-radius:8px;padding:10px 24px;font-weight:800;font-size:13px;letter-spacing:0.6px;cursor:pointer;font-family:inherit;box-shadow:0 4px 12px rgba(255,209,102,0.35)}',
+    '.rpg-howto-btn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(255,209,102,0.5)}',
     '.rpg-starter-choices{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:6px}',
     '.rpg-starter-card{background:#1e1e2e;border-radius:10px;padding:14px 12px;cursor:pointer;transition:transform 200ms,box-shadow 200ms,border-color 200ms;width:110px;border:1.5px solid #2a2a36}',
     '.rpg-starter-card:hover{transform:translateY(-4px);box-shadow:0 8px 22px rgba(255,209,102,0.35);border-color:#ffd166}',
@@ -1424,7 +1437,7 @@
     persistPlayer(); renderPanel();
     flashXPGain(amount);
     if (leveled) { flashLevelUp(el.charSlot, 'LEVEL UP! ' + state.player.level); respawnAllRoamers(); }
-    console.log('[APM RPG] +' + amount + ' XP (' + reason + ')');
+    vlog('[APM RPG] +' + amount + ' XP (' + reason + ')');
   };
 
   // ================================================================
@@ -1440,7 +1453,7 @@
 
   const handleNavActivity = (source) => {
     if (!canFire('nav', NAV_COOLDOWN_MS)) return;
-    console.log('[APM RPG] nav activity via', source);
+    vlog('[APM RPG] nav activity via', source);
     setTimeout(rollWildSpawn, 500);
     if (Math.random() < PAGE_CHANGE_XP_CHANCE) {
       grantPlayerXP(XP_REWARDS.pageChange, 'page change');
@@ -1694,7 +1707,7 @@
     document.body.appendChild(wildEl);
     requestAnimationFrame(() => requestAnimationFrame(moveWild));
     wildRoamTimer = setInterval(moveWild, 8000);
-    console.log('[APM RPG] Wild ' + (special ? (variantLabel(wildVariant).toUpperCase() + ' ') : '') + wildPet.name + ' appeared!');
+    vlog('[APM RPG] Wild ' + (special ? (variantLabel(wildVariant).toUpperCase() + ' ') : '') + wildPet.name + ' appeared!');
   };
 
   const despawnWild = () => {
@@ -1799,6 +1812,7 @@
           modal.remove();
           renderPanel();
           respawnAllRoamers();
+          setTimeout(showHowToModal, 250);
         }
       });
       card.appendChild($('img', { src: p.img }));
@@ -1807,6 +1821,27 @@
       choices.appendChild(card);
     }
     inner.appendChild(choices);
+    modal.appendChild(inner);
+    document.body.appendChild(modal);
+  };
+
+  const showHowToModal = () => {
+    if (document.querySelector('.rpg-howto-modal')) return;
+    const uname = (state.player && state.player.username) || '';
+    const greet = uname ? ('Welcome, ' + uname + '! ') : 'Welcome! ';
+    const modal = $('div', { class: 'rpg-modal rpg-howto-modal' });
+    const inner = $('div', { class: 'rpg-modal-inner' });
+    inner.appendChild($('h3', { html: 'HOW TO PLAY', style: { margin: '0 0 4px', color: '#ffd166' } }));
+    inner.appendChild($('div', {
+      class: 'rpg-howto-body',
+      html: greet + 'APM RPG runs quietly in the background while you work. Every time you navigate around EAM, you have a chance to earn <b>XP</b> and to spot a <b>wild pet</b> drifting across your screen \u2014 click one to try to catch it. Level up to unlock <b>extra pet slots</b>, <b>new character portraits</b>, and <b>new banners</b>. That\u2019s it. Get to work!'
+    }));
+    const btn = $('button', {
+      class: 'rpg-howto-btn',
+      html: "Let\u2019s go!",
+      onclick: () => { writeRaw(K.howto, '1'); modal.remove(); }
+    });
+    inner.appendChild(btn);
     modal.appendChild(inner);
     document.body.appendChild(modal);
   };
@@ -1846,6 +1881,9 @@
     // Starter pet choice for new users
     if (!readRaw(K.starter) && state.collection.length === 0 && PETS.length > 0) {
       setTimeout(showStarterModal, 800);
+    } else if (!readRaw(K.howto)) {
+      // Starter already granted (e.g. from a prior version) but how-to never seen \u2014 show it once.
+      setTimeout(showHowToModal, 800);
     }
     // Poll the hosted script for a newer version (respects 1h cache)
     setTimeout(() => checkForUpdate(false), 3000);
@@ -1895,6 +1933,56 @@
   };
   // Sandbox-context handle (works from Tampermonkey's isolated context).
   window.APM_RPG = APM_RPG_API;
+
+  // Page-window direct handles (bypass the postMessage bridge, which
+  // times out in EAM's sandboxed subframes). Mirror every API method
+  // as __apmRpg<Method> on the raw page window so devtools can call
+  // them regardless of which frame is active.
+  try {
+    const pwin = (typeof unsafeWindow !== 'undefined' && unsafeWindow) ? unsafeWindow : window;
+    const expose = (name, fn) => { try { pwin[name] = fn; } catch (e) {} };
+    expose('__apmRpgGrantXP',        (n) => APM_RPG_API.grantXP(n));
+    expose('__apmRpgSetLevel',       (l) => APM_RPG_API.setLevel(l));
+    expose('__apmRpgSpawn',          ()  => APM_RPG_API.spawn());
+    expose('__apmRpgSpawnVariant',   (v) => APM_RPG_API.spawnVariant(v));
+    expose('__apmRpgRollSpawn',      ()  => APM_RPG_API.rollSpawn());
+    expose('__apmRpgDespawn',        ()  => APM_RPG_API.despawn());
+    expose('__apmRpgDetect',         ()  => APM_RPG_API.detect());
+    expose('__apmRpgSetUsername',    (u) => APM_RPG_API.setUsername(u));
+    expose('__apmRpgReset',          ()  => APM_RPG_API.reset());
+    expose('__apmRpgCheckUpdate',    ()  => APM_RPG_API.checkUpdate());
+    expose('__apmRpgUpdateInfo',     ()  => APM_RPG_API.updateInfo());
+    expose('__apmRpgDebugUpdate',    ()  => APM_RPG_API.debugUpdate());
+    expose('__apmRpgClearUpdateCache',() => APM_RPG_API.clearUpdateCache());
+    expose('__apmRpgState',          ()  => APM_RPG_API.state);
+    expose('__apmRpgSetVerbose',     (b) => { VERBOSE = !!b; return 'verbose=' + VERBOSE; });
+    expose('__apmRpgHelp', () => {
+      const list = [
+        '__apmRpgGrantXP(n)          grant n XP to the player',
+        '__apmRpgSetLevel(lvl)       jump to a specific level (resets XP progress)',
+        '__apmRpgSpawn()             force a wild pet to spawn',
+        '__apmRpgSpawnVariant(v)     force a shiny|hollow|rainbow spawn',
+        '__apmRpgRollSpawn()         roll a normal wild spawn attempt',
+        '__apmRpgDespawn()           remove the current wild pet',
+        '__apmRpgDetect()            log detected username / alias',
+        '__apmRpgSetUsername(u)      override the displayed username',
+        '__apmRpgReset()             wipe all state and reload',
+        '__apmRpgCheckUpdate()       force an update check (bypass 1h cache)',
+        '__apmRpgUpdateInfo()        show local/latest version + last check time',
+        '__apmRpgDebugUpdate()       dump full update diagnostic',
+        '__apmRpgClearUpdateCache()  reset the update cache',
+        '__apmRpgState()             return live state object (player/equip/collection)',
+        '__apmRpgSetVerbose(true)    enable verbose logging (nav/XP/spawns)',
+        '__apmRpgToggleBoundary()    toggle the wild-spawn arc visualization',
+        '__apmRpgSetBoundary(bool)   explicit set for the arc visualization',
+        '__apmRpgHelp()              this list',
+      ].join('\n');
+      console.log('%c[APM RPG] commands','color:#22c55e;font-weight:bold');
+      console.log(list);
+      return list;
+    });
+  } catch (e) {}
+
 
   // Page-context bridge: Chrome's isolated worlds silently block cross-context
   // property writes via unsafeWindow, so instead we inject a proxy into the page

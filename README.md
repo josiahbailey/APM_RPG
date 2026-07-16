@@ -1,26 +1,26 @@
 # APM RPG
 
-> A gamified RPG layer for Amazon's APM/PTP. Level up while you work, catch pets between clicks, and chase rare variants that appear once in ten thousand spawns.
+> A quiet RPG layer for Amazon's EAM / APM. Level up while you work, catch pets between clicks, and chase rare variants that appear once in a thousand spawns.
 
-A Tampermonkey userscript that overlays a lightweight RPG panel on Amazon's Enterprise Asset Management (EAM/APM) and PTP web interfaces. Completing work orders, creating new ones, and submitting PTPs grants EXP; leveling up unlocks characters, banners, and pet slots. Wild pets appear on the page for you to catch, with rare variants (Shiny, Gold, Rainbow) and per-variant celebration effects.
+A Tampermonkey userscript that overlays a lightweight RPG panel on top of EAM (Enterprise Asset Management) and PTP web interfaces. Navigating around the app grants XP; leveling up unlocks characters, banners, and pet slots. Wild pets appear on the page for you to catch, with rare variants (Shiny, Hollow, Rainbow) and per-variant celebration effects.
 
 Zero backend. All state lives in Tampermonkey's storage, scoped to your browser profile.
 
 ---
 
-## Features
+## Install
 
-- **Progression system** — EXP from real APM actions, character/banner unlocks tied to level thresholds
-- **Three pet slots** — unlock at Lv 1, 10, 20; each roams the page independently
-- **Wild pet catches** — 3% chance to spawn on page load or SPA navigation; click to attempt catch
-- **Rare variants** — Shiny (0.1%), Gold (0.03%), Rainbow (0.01%), each with dedicated audio + visual celebrations
-- **Pokédex** — track which pets and variants you've caught
-- **In-panel update button** — polls the hosted script hourly; pulses green when a newer version is available
-- **Fully self-contained** — no external assets, no network calls except the update check, no telemetry
+1. Install [Tampermonkey](https://www.tampermonkey.net/) for your browser.
+2. Open the raw userscript URL:
+   ```
+   https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/apm-rpg.user.js
+   ```
+3. Tampermonkey shows an install prompt. Click **Install**.
+4. Open an EAM / APM / PTP tab. The RPG panel appears at the top-left.
+
+Updates are automatic: Tampermonkey polls the raw URL on its own schedule, and the script itself checks hourly. When a newer version exists, a pulsing **UPDATE →** button appears in the panel; clicking it opens the raw URL so Tampermonkey can install the diff.
 
 ## Supported hosts
-
-The script activates on these domains:
 
 - `*.eam.hxgnsmartcloud.com`
 - `*.sso.eam.hxgnsmartcloud.com`
@@ -28,140 +28,226 @@ The script activates on these domains:
 - `*.ptp.amazon.dev`
 - `*.insights.amazon.dev`
 
-## Installation
+## How to play
 
-1. Install [Tampermonkey](https://www.tampermonkey.net/) for your browser (Chrome, Edge, Firefox, Safari all supported).
-2. Open the raw userscript URL:
-   ```
-   https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/apm-rpg.user.js
-   ```
-3. Tampermonkey will detect the `.user.js` extension and show an install prompt. Click **Install**.
-4. Navigate to an APM/PTP tab. The RPG panel appears at the top-left of the page.
+APM RPG runs quietly in the background while you work. Every time you navigate around EAM, you have a chance to earn **XP** and to spot a **wild pet** drifting across your screen — click it to try to catch it. Level up to unlock extra pet slots, new character portraits, and new banners. That's it. Get to work.
 
-Once installed, updates are handled automatically: Tampermonkey polls the raw URL on its own schedule (default daily), and the script itself checks hourly and surfaces a pulsing **UPDATE →** button in the panel when a newer version is available. Clicking the button opens the raw URL in a new tab, triggering Tampermonkey's install-diff view.
+## Earning XP
 
-## Earning EXP
+XP comes from two sources:
 
-The script watches for button clicks matching known APM actions:
-
-| Action | EXP | Detection |
+| Source | XP | Trigger |
 |---|---:|---|
-| Complete Work Order | 50 | Button text matches `/\bcomplete\b/` (excluding "incomplete") |
-| Create Work Order | 30 | Button text starts with `create` or `new` |
-| Submit PTP | 40 | On PTP host; button text starts with `submit` |
+| **Nav activity** | 5 | 15% chance per SPA nav event (see below) |
+| **Catch a wild pet** | 5 – 500 | Rarity-scaled, see rarity table |
 
-XP required to reach level *n* is `floor(100 * n^1.35)`, so leveling gets slower as you climb.
+XP required to reach level *n* is `floor(100 * n^1.35)`, so climbing gets steadily slower.
 
-## Catching pets
+### What counts as "nav activity"?
 
-Wild pets appear at random on the page (3% roll on load / hashchange / popstate). Click the wild pet up to three times to attempt a catch. The chance is set by the pet's base rate:
+EAM is a same-origin-iframe SPA that rarely uses `pushState`. The script hooks four navigation signals inside every same-origin frame:
 
-| Pet | Rarity | Spawn weight | Base catch rate |
-|---|---|---:|---:|
-| Slime | Common | 60 | 70% |
-| Fox | Rare | 30 | 35% |
-| Dragonet | Legendary | 10 | 10% |
+- `XMLHttpRequest` calls to any host on `*.eam.hxgnsmartcloud.com`, `*.eam.aws.a2z.com`, `*.ptp.amazon.dev`, or `*.insights.amazon.dev`
+- The same, over `fetch()`
+- `history.pushState` / `replaceState`
+- `popstate` and `hashchange` events
 
-### Variants
+Heartbeat / session-keepalive endpoints (`SESSION`, `BSFOOTR`, `KEEPALIVE`, `BSTIMR`, `IDLTIMR`) are filtered out so idle tabs don't grind XP.
 
-Each spawn independently rolls for a rare variant, cascading from rarest to most common:
+A 2 s cooldown prevents burst navigations from double-counting. Each qualifying event rolls a 15% chance to grant XP and independently rolls a wild-spawn check.
+
+## Wild pets
+
+Wild pets spawn on page load and on qualifying nav events, at a 5% roll each time. A spawn:
+
+- Picks a pet using weighted-random selection (see rarity table)
+- Independently rolls for a Shiny / Hollow / Rainbow variant
+- Places the pet in the arc-shaped roam zone around the RPG panel
+- Gives you **3 catch attempts** — each click rolls against the pet's base catch rate
+
+Catch rate is uniform across variants; rarity affects only spawn chance and XP reward.
+
+### Rarity table
+
+| Rarity | Spawn weight | Base catch rate | Catch XP | Pets |
+|---|---:|---:|---:|---:|
+| Common | 60 | 60% | 5 | 10 |
+| Rare | 25 | 40% | 15 | 6 |
+| Epic | 10 | 20% | 50 | 4 |
+| Legendary | 4 | 15% | 150 | 4 |
+| Ancient | 1 | 10% | 500 | 2 |
+
+Each pet in a rarity gets that spawn weight, so 10 commons at weight 60 each vs. 2 ancients at weight 1 each means commons are heavily favored.
+
+### Variant table
+
+Every wild spawn independently rolls for a variant, cascading rarest first:
 
 | Variant | Chance | Celebration |
 |---|---:|---|
-| Rainbow | 0.01% (1 in 10,000) | 100 particles, screen flash, panel shake, 8-note arpeggio sweep, conic-gradient banner |
-| Gold | 0.03% (3 in 10,000) | 50 particles, amber screen flash, 4-note brass fanfare, gradient banner |
-| Shiny | 0.1% (1 in 1,000) | 28 particles, 3-note arpeggio, gold banner |
-| Normal | 99.87% | 14 particles, 2-note confirm chime |
+| Rainbow | 0.1% (1 in 1,000) | Rainbow prismatic border, extra particles, sparkle audio |
+| Hollow | 0.5% (1 in 200) | Diamond-white glow, particles, chime |
+| Shiny | 1% (1 in 100) | Gold star badge, particles, chime |
+| Normal | 98.4% | Base sparkle only |
 
-Catch rate is the same across all variants — rarity is expressed by spawn chance alone.
+Variants are cosmetic overrides of any base pet and are tracked independently in the Dex.
 
-## Debug API
+## Unlock ladder
 
-The script exposes a debug interface on `window.APM_RPG` for testing and development:
+### Pet slots
+
+| Slot | Unlocks at |
+|---|---:|
+| 1 | Lv 1 |
+| 2 | Lv 5 |
+| 3 | Lv 10 |
+
+Each unlocked slot spawns a roamer that drifts around the page. Empty slots stay dark until you assign a pet.
+
+### Characters
+
+The first three portraits are Lv 1 starters. The rest step up by 2 levels each:
+
+| Portraits | Level |
+|---|---:|
+| Character 1, 2, 3 | 1 |
+| Character 4 | 3 |
+| Character 5 | 5 |
+| Character 6 | 7 |
+| Character 7 | 9 |
+| Character 8 | 11 |
+| Character 9 | 13 |
+| Character 10 | 15 |
+| Character 11 | 17 |
+| Character 12 | 19 |
+| Character 13 | 21 |
+| Character 14 | 23 |
+
+### Banners
+
+| Banner | Level |
+|---|---:|
+| None | 1 |
+| Forest | 3 |
+| Desert | 6 |
+| Snow | 9 |
+| Night Sky | 12 |
+| Volcano | 15 |
+| Ocean | 18 |
+| Meadow | 21 |
+| Void | 24 |
+| Gold | 27 |
+| Prismatic | 30 |
+
+## Starter selection & how-to modal
+
+On first install, you pick one of three starter pets (Mossmo, Sizzlo, Icedro). Once chosen, a one-paragraph "How to Play" modal appears. Both are guarded by storage flags, so they show exactly once per browser profile — reset your state (below) to see them again.
+
+## Panel
+
+The panel sits at the top-left and holds:
+
+- Character portrait, username, XP bar, and level
+- Three pet slots (locked slots show `Lv N`)
+- A collapse tab on the right edge — click to slide the panel behind a thin strip
+- A **Dex** button that opens the full pet index (species counter, variant labels, per-pet catch history, per-pet release)
+- An update button that pulses green when a newer version is available
+
+Clicking the portrait opens the customize menu (character + banner sliders). Clicking a pet slot opens the pet swap menu for that slot.
+
+## Reset & dev mode
+
+Reset the entire save from the panel (small **Reset** button at the bottom left of the page) or from devtools:
 
 ```js
-APM_RPG.grantXP(500);              // Grant EXP directly
-APM_RPG.setLevel(20);              // Jump to a specific level
-APM_RPG.spawn();                   // Force a wild spawn
-APM_RPG.spawnVariant('rainbow');   // Force a specific variant
-APM_RPG.rollSpawn();               // Roll a natural spawn attempt
-APM_RPG.despawn();                 // Remove the current wild pet
-APM_RPG.detect();                  // Show detected username / alias
-APM_RPG.setUsername('alias');      // Override the displayed username
-APM_RPG.checkUpdate();             // Force an update check (ignores cache)
-APM_RPG.updateInfo();              // Show local/latest version + last check time
-APM_RPG.state;                     // Live state object (player, equip, collection)
-APM_RPG.reset();                   // Wipe all state and reload
+__apmRpgReset()
 ```
 
-Open Chrome DevTools on any APM tab and paste any of the above into the console.
+Dev mode: set `const DEV_MODE = true;` at the top of the script to disable persistence — every reload starts clean.
+
+## Debug commands
+
+Two ways to call the debug API, both work from the browser devtools console:
+
+**Page-window handles (recommended — bypass the bridge, always reach the current frame):**
+
+```js
+__apmRpgHelp()            // list every command
+__apmRpgGrantXP(500)      // grant XP
+__apmRpgSetLevel(20)      // jump to a level
+__apmRpgSpawn()           // force a wild spawn
+__apmRpgSpawnVariant('rainbow')  // force a specific variant
+__apmRpgToggleBoundary()  // toggle the arc roam-zone overlay
+__apmRpgSetVerbose(true)  // enable verbose logging
+__apmRpgReset()           // wipe all state and reload
+```
+
+**Sandbox API (`APM_RPG.method()`)** is the same surface but goes through a postMessage bridge; it sometimes hits a "bridge timeout" in EAM's sandboxed subframes. Prefer the `__apmRpg*` handles.
+
+For the full list, see `../APM_RPG_test_commands.md` alongside this repo, or run `__apmRpgHelp()` in the console.
 
 ## Storage
 
-The script uses Tampermonkey's `GM_setValue` API. State is scoped per browser profile and never leaves your machine.
+State lives in Tampermonkey's `GM_setValue` store, scoped per browser profile. Keys:
 
-Keys (all v2/v4 to reflect schema migrations):
-- `apm_rpg_version` — schema version marker
-- `apm_rpg_player_v2` — level, XP, username
-- `apm_rpg_collection_v2` — caught pet instances (with variants)
-- `apm_rpg_equip_v2` — currently equipped character, banner, pet slots
-- `apm_rpg_starter_granted` — first-catch bootstrap flag
-- `apm_rpg_update_v1` — cached remote version info
+| Key | Contents |
+|---|---|
+| `apm_rpg_player_v2` | level, XP, username, flags |
+| `apm_rpg_collection_v2` | caught pet instances (petId + variant) |
+| `apm_rpg_equip_v2` | equipped character, banner, pet slot instance IDs |
+| `apm_rpg_starter_granted` | one-time starter modal flag |
+| `apm_rpg_howto_seen` | one-time how-to modal flag |
+| `apm_rpg_version` | schema version marker |
+| `apm_rpg_installed_version_v1` | last observed installed version (for update banner) |
 
-Data migrates forward on load; v1 → v2 → v3 → v4 is handled transparently. To wipe everything, use the small **Reset** button at the bottom-left of the page or `APM_RPG.reset()`.
-
-## Dev mode
-
-Set `const DEV_MODE = true` at the top of the script to disable persistence — state resets on every page load. Useful when iterating on features without spending hours grinding levels.
+Migrations from v1 → v2 keys run transparently on load.
 
 ## Development
 
-The script is a single file, no build step, no bundler. Edit `apm-rpg.user.js` directly, save, and Tampermonkey picks up the change on next page load (or click **Reset changes** in the Tampermonkey dashboard to force a refresh).
+Single file, no build step. Edit `apm-rpg.user.js` and save; Tampermonkey picks up the change on the next page load.
 
-### Layout
+### File layout
 
 ```
 apm-rpg.user.js
-├── @UserScript metadata block          (lines 1-25)
-├── CONFIG                              (characters, banners, pets, XP, variants)
-├── FRAME GUARD                         (subframe → top-frame username relay)
-├── STORAGE / MIGRATIONS                (v1 → v4 cascade)
-├── UPDATE CHECK                        (GM_xmlhttpRequest poller)
-├── STYLES                              (inline CSS via GM_addStyle)
-├── UI                                  (buildPanel, renderPanel, DEX, menus)
-├── AUDIO + CELEBRATION                 (Web Audio synth, particles, banners)
-├── PETS / SPAWNS / CATCH               (wild spawn, click-to-catch, roamers)
-├── XP HOOKS                            (button-click detection on APM actions)
-├── BOOT                                (bootstrap + username detection loop)
-└── DEBUG API                           (window.APM_RPG)
+├── @UserScript metadata block
+├── CONFIG               (rarities, characters, banners, pets, XP, variants)
+├── FRAME GUARD          (subframe → top-frame username relay)
+├── STORAGE / MIGRATIONS
+├── UPDATE CHECK         (GM_xmlhttpRequest poller + reload flow)
+├── STYLES               (inline CSS via GM_addStyle)
+├── UI                   (buildPanel, renderPanel, Dex, menus, modals)
+├── AUDIO + CELEBRATION  (Web Audio synth, particles)
+├── NAV DETECTION        (XHR/fetch/history hooks)
+├── WILD SPAWNS + CATCH  (spawn logic, click-to-catch, roamers)
+├── BOUNDARY VIZ         (arc roam-zone overlay + debug toggle)
+├── BOOT                 (bootstrap + starter + how-to modals)
+└── DEBUG API            (APM_RPG_API + __apmRpg* page-window handles)
 ```
 
 ### Versioning
 
-Bump `@version` in the metadata block before pushing. Tampermonkey compares versions using standard semver-style dotted-integer comparison; higher wins.
+Bump `@version` in the metadata block before pushing. Tampermonkey uses dotted-integer comparison; higher wins.
 
 ### Publishing
 
-Push to Gitfarm:
-
-```
+```powershell
 git add apm-rpg.user.js
 git commit -m "vX.Y.Z: <summary>"
 git push origin main
 ```
 
-The raw URL refreshes within seconds of the push (GitHub CDN cache). Users on `< X.Y.Z` will see the update button within an hour (or on their next page load if their cache is stale).
+The raw URL refreshes within seconds. Users on older versions see the in-panel update button within an hour.
 
 ## Compatibility
 
-- **Browsers:** any Chromium browser, Firefox, or Safari with Tampermonkey installed
-- **Tampermonkey:** v4.13+ recommended (for `GM_xmlhttpRequest` and `@connect` support)
-- **APM/PTP:** works with the current EAM web UI and PTP dev/insights portals as of 2026
+- Chromium, Firefox, Safari — anywhere Tampermonkey runs
+- Tampermonkey 4.13+ recommended for `GM_xmlhttpRequest` + `@connect`
 
 ## Support
 
-Bugs, feature requests, and RPG balance concerns: file an issue against this package or ping @baijosis.
+Ping @baijosis or open an issue on the repo.
 
 ## License
 
-Amazon internal. Not for external distribution.
+Personal project. Not affiliated with the EAM/APM teams.
