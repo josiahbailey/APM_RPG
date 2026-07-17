@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      1.0.5
+// @version      1.0.6
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -134,7 +134,7 @@
     { id: 'pt_thundra',   name: 'Thundra',   rarity: 'Ancient',   img: IMG_BASE + '/Pet_Images/Ancient/Thundra.png'    },
   ];
   // Starter pool — offered in the starter picker modal.
-  const STARTER_IDS = ['pt_mossmo', 'pt_sizzlo', 'pt_icedro'];
+  const STARTER_IDS = ['pt_mossmo', 'pt_sizzlo', 'pt_ribub'];
   // Derive numeric stats from RARITY_META so we have one source of truth.
   for (const pet of PETS) {
     const m = RARITY_META[pet.rarity];
