@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      1.0.8
+// @version      1.0.9
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -164,7 +164,6 @@
 
 
   const xpToNextLevel = (level) => Math.floor(100 * Math.pow(level, 1.35));
-  const WILD_SPAWN_TICK_MS = 15000;
   const WILD_SPAWN_CHANCE  = 0.05;  // rolled once per page load / SPA nav
   const CATCHERS_PER_SPAWN = 3;
   // Hosted at https://github.com/josiahbailey/APM_RPG (public GitHub).
@@ -172,9 +171,8 @@
   // metadata block on update polls, then fetches the full file on install.
   const UPDATE_META_URL     = 'https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/apm-rpg.user.js';
   const UPDATE_DOWNLOAD_URL = 'https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/apm-rpg.user.js';
-  const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;  // 5 minutes (rate limit; force=true bypasses)
-  const UPDATE_POLL_INTERVAL_MS  = 60 * 1000;      // how often to *try* checks (each try respects the rate limit)
-  const UPDATE_CACHE_KEY    = 'apm_rpg_update_v1';
+  const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;  // 24 hours (rate limit; force=true bypasses)
+  const UPDATE_POLL_INTERVAL_MS  = 60 * 60 * 1000; // how often to *try* checks (each try respects the 24 h rate limit)
   // Variant rarities. Each spawn independently rolls for the rarest tier down.
   // 'normal' is the fallthrough — all four are catch-rate multipliers over base.
   const VARIANT_META = {
@@ -230,6 +228,7 @@
     starter: 'apm_rpg_starter_granted',
     howto: 'apm_rpg_howto_seen',
     installedVersion: 'apm_rpg_installed_version_v1',
+    updateCache: 'apm_rpg_update_v1',
     v1_player: 'apm_rpg_player_v1', v1_pets: 'apm_rpg_pets_v1', v1_equip: 'apm_rpg_equip_v1',
   };
   const _devSink = {};
@@ -505,7 +504,7 @@
   const updateInfo = { checkedAt: 0, latest: null, available: false, newerLocalVersion: null };
   const loadUpdateCache = () => {
     try {
-      const raw = (typeof GM_getValue !== 'undefined') ? GM_getValue(UPDATE_CACHE_KEY) : null;
+      const raw = (typeof GM_getValue !== 'undefined') ? GM_getValue(K.updateCache) : null;
       if (raw) {
         const parsed = JSON.parse(raw);
         updateInfo.checkedAt = parsed.checkedAt || 0;
@@ -519,7 +518,7 @@
   const saveUpdateCache = () => {
     try {
       if (typeof GM_setValue !== 'undefined') {
-        GM_setValue(UPDATE_CACHE_KEY, JSON.stringify({ checkedAt: updateInfo.checkedAt, latest: updateInfo.latest }));
+        GM_setValue(K.updateCache, JSON.stringify({ checkedAt: updateInfo.checkedAt, latest: updateInfo.latest }));
       }
     } catch (e) {}
   };
@@ -535,7 +534,7 @@
     const now = Date.now();
     if (!force && (now - updateInfo.checkedAt) < UPDATE_CHECK_INTERVAL_MS) {
       const ageMin = Math.round((now - updateInfo.checkedAt) / 60000);
-      vlog('[APM RPG] update check rate-limited (last check ' + ageMin + ' min ago); use APM_RPG.checkUpdate() to force');
+      vlog('[APM RPG] update check rate-limited (last check ' + ageMin + ' min ago; 24h cooldown); use APM_RPG.checkUpdate() to force');
       return resolve({ skipped: 'rate-limit', local: LOCAL_VERSION, latest: updateInfo.latest, available: updateInfo.available });
     }
     try {
@@ -718,7 +717,6 @@
   // ================================================================
   // ENV
   // ================================================================
-  const isPTPHost = () => /(\.ptp|\.insights)\.amazon\.dev|insights\.hxgnsmartcloud/i.test(location.hostname);
 
   // ================================================================
   // STYLES
@@ -753,10 +751,8 @@
     '.rpg-right-col{display:none}',
     '.rpg-version{font-size:9px;color:#666;text-align:center;letter-spacing:0.5px;font-weight:600;user-select:text;margin-top:auto}',
     '.rpg-reset-btn{position:fixed;left:12px;bottom:12px;z-index:2147483000;font-size:9px;padding:3px 7px;background:rgba(40,0,0,0.8);color:#f77;border:1px solid #633;border-radius:4px;cursor:pointer;opacity:0.5}.rpg-reset-btn:hover{opacity:1;background:#400}',
-    '.rpg-update-toast{position:fixed;right:16px;bottom:120px;z-index:2147483001;padding:8px 16px;font-size:12px;font-weight:800;letter-spacing:0.6px;border-radius:8px;cursor:pointer;background:linear-gradient(135deg,#22c55e,#15803d);color:#fff;border:1px solid #16a34a;box-shadow:0 4px 14px rgba(34,197,94,0.4);animation:rpgUpdatePulse 2s ease-in-out infinite;transition:transform 0.15s ease}.rpg-update-toast:hover{filter:brightness(1.15);transform:translateY(-1px)}.rpg-update-toast:active{transform:translateY(0)}',
-    '.rpg-update-toast.rpg-reload-mode{background:linear-gradient(135deg,#f97316,#c2410c);border-color:#ea580c;box-shadow:0 4px 14px rgba(249,115,22,0.45);animation:rpgReloadPulse 2s ease-in-out infinite}',
-    '@keyframes rpgUpdatePulse{0%,100%{box-shadow:0 4px 14px rgba(34,197,94,0.4)}50%{box-shadow:0 4px 18px rgba(34,197,94,0.75),0 0 0 6px rgba(34,197,94,0.15)}}',
-    '@keyframes rpgReloadPulse{0%,100%{box-shadow:0 4px 14px rgba(249,115,22,0.45)}50%{box-shadow:0 4px 18px rgba(249,115,22,0.8),0 0 0 6px rgba(249,115,22,0.18)}}',
+    '.rpg-update-toast{position:fixed;right:16px;bottom:120px;z-index:2147483001;padding:4px 10px;font-size:10px;font-weight:800;letter-spacing:0.4px;border-radius:6px;cursor:pointer;background:linear-gradient(135deg,#22c55e,#15803d);color:#fff;border:1px solid #16a34a;box-shadow:0 2px 8px rgba(34,197,94,0.35);animation:rpgUpdatePulse 2s ease-in-out infinite;transition:transform 0.15s ease}.rpg-update-toast:hover{filter:brightness(1.15);transform:translateY(-1px)}.rpg-update-toast:active{transform:translateY(0)}',
+    '@keyframes rpgUpdatePulse{0%,100%{box-shadow:0 2px 8px rgba(34,197,94,0.35)}50%{box-shadow:0 2px 10px rgba(34,197,94,0.7),0 0 0 4px rgba(34,197,94,0.12)}}',
     '.rpg-menu{position:fixed;right:16px;bottom:110px;z-index:2147483001;background:rgba(20,20,28,0.97);border:1px solid #3b3b48;border-radius:12px;padding:12px;color:#eee;max-width:380px;max-height:60vh;overflow-y:auto;box-shadow:0 10px 30px rgba(0,0,0,0.6)}',
     '.rpg-menu h4{margin:0 0 8px;font-size:12px;color:#ffd166}',
     '.rpg-menu-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}',
@@ -955,6 +951,7 @@
         state.player.panelCollapsed = !state.player.panelCollapsed;
         persistPlayer();
         el.panelWrap.classList.toggle('rpg-collapsed', !!state.player.panelCollapsed);
+        renderPanel();  // re-run so update button hides/reveals with the panel
       }
     });
     el.panelWrap.appendChild(el.panelTab);
@@ -968,9 +965,7 @@
       onclick: (e) => {
         if (e && e.preventDefault) e.preventDefault();
         if (e && e.stopPropagation) e.stopPropagation();
-        // If a newer version is already installed elsewhere, just reload this tab.
-        if (updateInfo.newerLocalVersion) { safeReload(); return; }
-        // Otherwise open the raw URL for Tampermonkey to install.
+        // Open the raw URL so Tampermonkey shows its install-diff prompt.
         if (UPDATE_DOWNLOAD_URL && UPDATE_DOWNLOAD_URL.indexOf('REPLACE_ME') === -1) {
           window.open(UPDATE_DOWNLOAD_URL, '_blank');
         }
@@ -1054,30 +1049,25 @@
     el.xpTxt.textContent = 'EXP ' + state.player.xp + ' / ' + need;
     if (el.hidePetsBtn) el.hidePetsBtn.textContent = state.player.hideRoamers ? 'Show Pets' : 'Hide Pets';
     if (el.updateBtn) {
-      // Priority: reload-for-newer-installed OR pending-install > github-update-available > hidden
-      // pendingInstallVersion is set when user clicks UPDATE — after they return
-      // to this tab we surface RELOAD without waiting for another tab to boot.
-      const reloadTargetVersion = updateInfo.newerLocalVersion || updateInfo.pendingInstallVersion;
-      if (reloadTargetVersion) {
-        el.updateBtn.innerHTML = 'RELOAD FOR v' + reloadTargetVersion;
-        el.updateBtn.title = 'A newer version is available. Click to reload this tab into it.';
-        el.updateBtn.classList.add('rpg-reload-mode');
-        el.updateBtn.style.display = '';
-      } else if (updateInfo.available && updateInfo.latest) {
+      // Show UPDATE only when the GitHub check found something newer AND this
+      // tab is still running the older version AND the panel isn't collapsed.
+      // If another tab has already installed the newer version (newerLocalVersion),
+      // treat that as "handled" and hide the button — no RELOAD prompt.
+      const shouldShow = updateInfo.available
+        && updateInfo.latest
+        && !updateInfo.newerLocalVersion
+        && !state.player.panelCollapsed;
+      if (shouldShow) {
         el.updateBtn.innerHTML = 'UPDATE \u2192 v' + updateInfo.latest;
         el.updateBtn.title = 'A new version is available. Click to install.';
-        el.updateBtn.classList.remove('rpg-reload-mode');
         el.updateBtn.style.display = '';
-      } else {
-        el.updateBtn.classList.remove('rpg-reload-mode');
-        el.updateBtn.style.display = 'none';
-      }
-      if (el.updateBtn.style.display === '') {
         requestAnimationFrame(() => {
           if (!el.panel || !el.updateBtn) return;
           const r = el.panel.getBoundingClientRect();
           el.updateBtn.style.bottom = Math.max(16, window.innerHeight - r.top + 8) + 'px';
         });
+      } else {
+        el.updateBtn.style.display = 'none';
       }
     }
   };
@@ -1441,10 +1431,12 @@
   };
 
   // ================================================================
-  // NAV DETECTION — history + hashchange + popstate.
-  // Only surface is nav activity: rolls a wild spawn (5%) and awards
-  // +5 XP (15%), throttled by NAV_COOLDOWN_MS. No XHR/fetch hooks, no
-  // click heuristics, no URL classification.
+  // NAV DETECTION — hooks XHR, fetch, history.pushState/replaceState,
+  // popstate, and hashchange inside every same-origin frame. XHR/fetch
+  // URLs are classified against EAM_API_URL_RE + EAM_HOST_RE and filtered
+  // through EAM_HEARTBEAT_RE so idle keepalive traffic is ignored.
+  // Every qualifying event rolls a wild spawn (5%) and awards +5 XP
+  // (15%), throttled by NAV_COOLDOWN_MS.
   // ================================================================
   const cooldown = { nav: 0 };
   const canFire = (k, ms) => { const now = Date.now(); if (now - cooldown[k] < ms) return false; cooldown[k] = now; return true; };
@@ -1768,14 +1760,14 @@
         setTimeout(() => { if (wildEl) wildEl.classList.remove('rpg-wild-shake'); }, 400);
         // On 1st + 2nd failure, float a small "Failed to catch!" over the pet.
         // 3rd failure already shows a "ran away" modal so we skip it there.
-        if (wildAttempts < 3) {
+        if (wildAttempts < CATCHERS_PER_SPAWN) {
           const failText = $('div', { class: 'rpg-fail-catch', html: 'Failed to catch!' });
           wildEl.appendChild(failText);
           setTimeout(() => { if (failText && failText.parentNode) failText.remove(); }, 1400);
         }
       }
       setTimeout(moveWild, 350);
-      if (wildAttempts >= 3) {
+      if (wildAttempts >= CATCHERS_PER_SPAWN) {
         const name = (wildPet && wildPet.name) || 'pet';
         const wasVar = wildVariant;
         despawnWild();
@@ -1852,25 +1844,12 @@
   const startSyncPolling = () => {
     const tick = () => { try { checkForUpdate(false); } catch (e) {} bumpInstalledVersion(); };
     setInterval(tick, UPDATE_POLL_INTERVAL_MS);
+    // visibilitychange covers tab refocus; no need for a duplicate 'focus' listener.
     document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
-    window.addEventListener('focus', tick);
   };
 
   const boot = () => {
-    // Wake the update toast the moment this tab comes back into view.
-  // The user just clicked UPDATE -> went to Tampermonkey -> comes back here.
-  // Show RELOAD immediately using the version they went to install.
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) return;
-    if (updateInfo.pendingInstallVersion && typeof renderPanel === 'function' && el && el.panel) {
-      renderPanel();
-    }
-    // Also do an opportunistic re-check + resync — cheap, rate-limited.
-    try { if (typeof bumpInstalledVersion === 'function') bumpInstalledVersion(); } catch (e) {}
-    try { if (typeof checkForUpdate === 'function') checkForUpdate(false); } catch (e) {}
-  });
-
-  console.log('[APM RPG] v' + LOCAL_VERSION + ' loaded');
+    console.log('[APM RPG] v' + LOCAL_VERSION + ' loaded');
     setupMultiTabSync();
     bumpInstalledVersion();
     loadUpdateCache();
@@ -1906,7 +1885,7 @@
     grantXP: (n) => grantPlayerXP(n || 50, 'debug'),
     setLevel: (lvl) => { state.player.level = Math.max(1, lvl|0); state.player.xp = 0; persistPlayer(); renderPanel(); respawnAllRoamers(); },
     spawn: () => spawnWild(),
-    spawnVariant: (v) => { const orig = Math.random; Math.random = (() => { let n = 0; return () => n++ === 0 ? 0 : orig(); })(); const targetChance = { rainbow: 0, hollow: VARIANT_META.rainbow.chance, shiny: VARIANT_META.rainbow.chance + VARIANT_META.hollow.chance }[v]; Math.random = (() => { let n = 0; return () => n++ === 0 ? (targetChance !== undefined ? targetChance : 0.99) : orig(); })(); spawnWild(); Math.random = orig; },
+    spawnVariant: (v) => { const orig = Math.random; const targetChance = { rainbow: 0, hollow: VARIANT_META.rainbow.chance, shiny: VARIANT_META.rainbow.chance + VARIANT_META.hollow.chance }[v]; Math.random = (() => { let n = 0; return () => n++ === 0 ? (targetChance !== undefined ? targetChance : 0.99) : orig(); })(); spawnWild(); Math.random = orig; },
     rollSpawn: () => rollWildSpawn(),
     despawn: despawnWild,
     detect: () => { const raw = detectUsername(); const norm = normalizeAlias(raw); console.log('raw:', raw, '-> alias:', norm); return norm; },
