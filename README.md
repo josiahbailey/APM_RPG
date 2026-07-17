@@ -18,7 +18,7 @@ Zero backend. All state lives in Tampermonkey's storage, scoped to your browser 
 3. Tampermonkey shows an install prompt. Click **Install**.
 4. Open an EAM / APM / PTP tab. The RPG panel appears at the top-left.
 
-Updates are automatic: Tampermonkey polls the raw URL on its own schedule, and the script itself checks hourly. When a newer version exists, a pulsing **UPDATE →** button appears in the panel; clicking it opens the raw URL so Tampermonkey can install the diff.
+Updates are automatic: Tampermonkey polls the raw URL on its own schedule, and the script itself does a rate-limited check about once a day. When a newer version exists, a small pulsing **UPDATE →** button appears next to the panel; clicking it opens the raw URL so Tampermonkey can install the diff. The button also hides when the panel is collapsed.
 
 ## Supported hosts
 
@@ -141,7 +141,7 @@ The first three portraits are Lv 1 starters. The rest step up by 2 levels each:
 
 ## Starter selection & how-to modal
 
-On first install, you pick one of three starter pets (Mossmo, Sizzlo, Icedro). Once chosen, a one-paragraph "How to Play" modal appears. Both are guarded by storage flags, so they show exactly once per browser profile — reset your state (below) to see them again.
+On first install, you pick one of three starter pets (Mossmo, Sizzly, Ribub). Once chosen, a one-paragraph "How to Play" modal appears. Both are guarded by storage flags, so they show exactly once per browser profile — reset your state (below) to see them again.
 
 ## Panel
 
@@ -237,7 +237,7 @@ git commit -m "vX.Y.Z: <summary>"
 git push origin main
 ```
 
-The raw URL refreshes within seconds. Users on older versions see the in-panel update button within an hour.
+The raw URL refreshes within seconds. Users on older versions see the in-panel update button within a day (or immediately on next full reload).
 
 ## Compatibility
 
