@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      1.0.6
+// @version      1.0.7
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -109,7 +109,7 @@
     { id: 'pt_oinky',     name: 'Oinky',     rarity: 'Common',    img: IMG_BASE + '/Pet_Images/Common/Oinky.png'    },
     { id: 'pt_ribub',     name: 'Ribub',     rarity: 'Common',    img: IMG_BASE + '/Pet_Images/Common/Ribub.png'    },
     { id: 'pt_sanda',     name: 'Sanda',     rarity: 'Common',    img: IMG_BASE + '/Pet_Images/Common/Sanda.png'    },
-    { id: 'pt_sizzlo',    name: 'Sizzlo',    rarity: 'Common',    img: IMG_BASE + '/Pet_Images/Common/Sizzlo.png'   },
+    { id: 'pt_sizzlo',    name: 'Sizzly',    rarity: 'Common',    img: IMG_BASE + '/Pet_Images/Common/Sizzlo.png'   },
     { id: 'pt_sunbun',    name: 'Sunbun',    rarity: 'Common',    img: IMG_BASE + '/Pet_Images/Common/Sunbun.png'   },
     { id: 'pt_windro',    name: 'Windro',    rarity: 'Common',    img: IMG_BASE + '/Pet_Images/Common/Windro.png'   },
     // ── Rare (6) ────────────────────────────────────────────────
