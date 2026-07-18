@@ -31,8 +31,8 @@
   const DEV_MODE = false;
 
   // ================================================================
-  // VERBOSE LOGGING - flip to true (or call __apmRpgSetVerbose(true))
-  // to see every nav-detect / XP grant / update-check chatter.
+  // VERBOSE LOGGING - flip to true to see every nav-detect / XP grant /
+  // update-check chatter (source-only knob in the public build).
   // ================================================================
   let VERBOSE = false;
   const vlog = function() { if (!VERBOSE) return; try { console.log.apply(console, arguments); } catch (e) {} };
@@ -1624,16 +1624,6 @@
     return boundaryVizOn ? 'on' : 'off';
   };
   window.addEventListener('resize', () => { if (boundaryVizOn) rebuildBoundaryViz(); });
-  // Direct page-window handles (bypass the postMessage bridge, which sometimes
-  // times out in EAM's sandboxed frames). Call from devtools as
-  //   __apmRpgToggleBoundary()   -> toggles on/off
-  //   __apmRpgSetBoundary(true)  -> explicit set
-  try {
-    const win = (typeof unsafeWindow !== 'undefined' && unsafeWindow) ? unsafeWindow : window;
-    win.__apmRpgToggleBoundary = () => setBoundaryViz(!boundaryVizOn);
-    win.__apmRpgSetBoundary    = (on) => setBoundaryViz(on);
-  } catch (e) {}
-
   // ================================================================
   // ROAMING PETS (up to 3, one per unlocked active slot)
   // ================================================================
@@ -1905,161 +1895,4 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
 
-  const APM_RPG_API = {
-    grantXP: (n) => grantPlayerXP(n || 50, 'debug'),
-    setLevel: (lvl) => { state.player.level = Math.max(1, lvl|0); state.player.xp = 0; persistPlayer(); renderPanel(); respawnAllRoamers(); },
-    spawn: () => spawnWild(),
-    spawnVariant: (v) => {
-      const valid = ['normal', 'shiny', 'hollow', 'rainbow'];
-      if (valid.indexOf(v) === -1) { console.warn('[APM RPG] unknown variant:', v, '(use one of', valid.join(', ') + ')'); return; }
-      // Despawn any existing wild first so spawnWild()'s early-return guard
-      // doesn't leave _forcedVariant set (which would pollute the next natural spawn).
-      despawnWild();
-      _forcedVariant = v;
-      spawnWild();
-      // Belt-and-suspenders: if spawnWild bailed for any other reason,
-      // clear the flag so the natural roll path stays clean.
-      _forcedVariant = null;
-    },
-    rollSpawn: () => rollWildSpawn(),
-    despawn: despawnWild,
-    detect: () => { const raw = detectUsername(); const norm = normalizeAlias(raw); console.log('raw:', raw, '-> alias:', norm); return norm; },
-    state: state,
-    setUsername: (u) => { state.player.username = u; persistPlayer(); renderPanel(); },
-    reset: () => { Object.values(K).forEach(deleteRaw); setTimeout(() => safeReload(), 50); },
-    devMode: DEV_MODE,
-    checkUpdate: () => checkForUpdate(true),
-    updateInfo: () => ({ local: LOCAL_VERSION, latest: updateInfo.latest, available: updateInfo.available, checkedAt: updateInfo.checkedAt ? new Date(updateInfo.checkedAt).toISOString() : 'never', url: UPDATE_DOWNLOAD_URL }),
-    debugUpdate: () => ({
-      local: LOCAL_VERSION,
-      updateInfo: { latest: updateInfo.latest, available: updateInfo.available, newerLocalVersion: updateInfo.newerLocalVersion, checkedAt: updateInfo.checkedAt ? new Date(updateInfo.checkedAt).toISOString() : 'never' },
-      installedRecord: (() => { try { return JSON.parse(readRaw(K.installedVersion)); } catch(e) { return null; } })(),
-      url: UPDATE_META_URL,
-      hasGmXhr: typeof GM_xmlhttpRequest !== 'undefined',
-      hasChangeListener: typeof GM_addValueChangeListener !== 'undefined',
-      grants: (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.grant) || [],
-      buttonExists: !!(el && el.updateBtn),
-      buttonVisible: !!(el && el.updateBtn && el.updateBtn.style.display !== 'none'),
-      cacheIntervalMs: UPDATE_CHECK_INTERVAL_MS
-    }),
-    clearUpdateCache: () => { updateInfo.checkedAt = 0; updateInfo.latest = null; updateInfo.available = false; saveUpdateCache(); return 'cleared'; },
-    toggleBoundary: () => setBoundaryViz(!boundaryVizOn),
-  };
-  // Sandbox-context handle (works from Tampermonkey's isolated context).
-  window.APM_RPG = APM_RPG_API;
-
-  // Page-window direct handles (bypass the postMessage bridge, which
-  // times out in EAM's sandboxed subframes). Mirror every API method
-  // as __apmRpg<Method> on the raw page window so devtools can call
-  // them regardless of which frame is active.
-  try {
-    const pwin = (typeof unsafeWindow !== 'undefined' && unsafeWindow) ? unsafeWindow : window;
-    const expose = (name, fn) => { try { pwin[name] = fn; } catch (e) {} };
-    expose('__apmRpgGrantXP',        (n) => APM_RPG_API.grantXP(n));
-    expose('__apmRpgSetLevel',       (l) => APM_RPG_API.setLevel(l));
-    expose('__apmRpgSpawn',          ()  => APM_RPG_API.spawn());
-    expose('__apmRpgSpawnVariant',   (v) => APM_RPG_API.spawnVariant(v));
-    expose('__apmRpgRollSpawn',      ()  => APM_RPG_API.rollSpawn());
-    expose('__apmRpgDespawn',        ()  => APM_RPG_API.despawn());
-    expose('__apmRpgDetect',         ()  => APM_RPG_API.detect());
-    expose('__apmRpgSetUsername',    (u) => APM_RPG_API.setUsername(u));
-    expose('__apmRpgReset',          ()  => APM_RPG_API.reset());
-    expose('__apmRpgCheckUpdate',    ()  => APM_RPG_API.checkUpdate());
-    expose('__apmRpgUpdateInfo',     ()  => APM_RPG_API.updateInfo());
-    expose('__apmRpgDebugUpdate',    ()  => APM_RPG_API.debugUpdate());
-    expose('__apmRpgClearUpdateCache',() => APM_RPG_API.clearUpdateCache());
-    expose('__apmRpgState',          ()  => APM_RPG_API.state);
-    expose('__apmRpgSetVerbose',     (b) => { VERBOSE = !!b; return 'verbose=' + VERBOSE; });
-    expose('__apmRpgHelp', () => {
-      const list = [
-        '__apmRpgGrantXP(n)          grant n XP to the player',
-        '__apmRpgSetLevel(lvl)       jump to a specific level (resets XP progress)',
-        '__apmRpgSpawn()             force a wild pet to spawn',
-        '__apmRpgSpawnVariant(v)     force a shiny|hollow|rainbow spawn',
-        '__apmRpgRollSpawn()         roll a normal wild spawn attempt',
-        '__apmRpgDespawn()           remove the current wild pet',
-        '__apmRpgDetect()            log detected username / alias',
-        '__apmRpgSetUsername(u)      override the displayed username',
-        '__apmRpgReset()             wipe all state and reload',
-        '__apmRpgCheckUpdate()       force an update check (bypass 1h cache)',
-        '__apmRpgUpdateInfo()        show local/latest version + last check time',
-        '__apmRpgDebugUpdate()       dump full update diagnostic',
-        '__apmRpgClearUpdateCache()  reset the update cache',
-        '__apmRpgState()             return live state object (player/equip/collection)',
-        '__apmRpgSetVerbose(true)    enable verbose logging (nav/XP/spawns)',
-        '__apmRpgToggleBoundary()    toggle the wild-spawn arc visualization',
-        '__apmRpgSetBoundary(bool)   explicit set for the arc visualization',
-        '__apmRpgHelp()              this list',
-      ].join('\n');
-      console.log('%c[APM RPG] commands','color:#22c55e;font-weight:bold');
-      console.log(list);
-      return list;
-    });
-  } catch (e) {}
-
-
-  // Page-context bridge: Chrome's isolated worlds silently block cross-context
-  // property writes via unsafeWindow, so instead we inject a proxy into the page
-  // and communicate via postMessage. Methods become async on the page side.
-  const APM_RPG_METHODS = ['grantXP','setLevel','spawn','spawnVariant','rollSpawn','despawn','detect','setUsername','reset','checkUpdate','updateInfo','debugUpdate','clearUpdateCache','toggleBoundary'];
-
-  window.addEventListener('message', async (e) => {
-    if (e.source !== window || !e.data || e.data.__apm_rpg !== 'call') return;
-    const req = e.data;
-    let result, error;
-    try {
-      const target = APM_RPG_API[req.method];
-      if (typeof target === 'function') {
-        result = target.apply(APM_RPG_API, req.args || []);
-      } else if (req.method === 'state') {
-        result = APM_RPG_API.state;
-      } else {
-        result = target;
-      }
-      // If the sandbox returned a Promise, await it so the page gets the resolved value
-      if (result && typeof result.then === 'function') {
-        result = await result;
-      }
-      try { result = JSON.parse(JSON.stringify(result === undefined ? null : result)); }
-      catch (err) { result = String(result); }
-    } catch (err) {
-      error = String((err && err.message) || err);
-    }
-    window.postMessage({ __apm_rpg: 'result', id: req.id, result: result, error: error }, '*');
-  });
-
-  const injectPageBridge = () => {
-    const script = document.createElement('script');
-    script.setAttribute('data-apm-rpg-bridge', '1');
-    script.textContent =
-      '(function(){' +
-        'if(window.APM_RPG&&window.APM_RPG.__bridge)return;' +
-        'var pending=new Map();' +
-        'window.addEventListener("message",function(e){' +
-          'if(e.source!==window||!e.data||e.data.__apm_rpg!=="result")return;' +
-          'var p=pending.get(e.data.id);' +
-          'if(!p)return;' +
-          'pending.delete(e.data.id);' +
-          'if(e.data.error)p.reject(new Error(e.data.error));' +
-          'else p.resolve(e.data.result);' +
-        '});' +
-        'var call=function(method,args){' +
-          'return new Promise(function(resolve,reject){' +
-            'var id="r"+Math.random().toString(36).slice(2)+Date.now().toString(36);' +
-            'pending.set(id,{resolve:resolve,reject:reject});' +
-            'window.postMessage({__apm_rpg:"call",id:id,method:method,args:args||[]},"*");' +
-            'setTimeout(function(){if(pending.has(id)){pending.delete(id);reject(new Error("APM_RPG bridge timeout"));}},5000);' +
-          '});' +
-        '};' +
-        'var methods=' + JSON.stringify(APM_RPG_METHODS) + ';' +
-        'var api={__bridge:true};' +
-        'methods.forEach(function(m){api[m]=function(){return call(m,Array.prototype.slice.call(arguments));};});' +
-        'Object.defineProperty(api,"state",{get:function(){return call("state",[]);}});' +
-        'window.APM_RPG=api;' +
-        'console.log("%c[APM RPG]%c page bridge ready. Use: await APM_RPG.updateInfo()","color:#22c55e;font-weight:bold","color:inherit");' +
-      '})();';
-    (document.head || document.documentElement).appendChild(script);
-    script.remove();
-  };
-  try { injectPageBridge(); } catch (e) { console.error('[APM RPG] bridge injection failed', e); }
 })();
