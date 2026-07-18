@@ -149,10 +149,10 @@
   const NAV_COOLDOWN_MS       = 2000;
   const PAGE_CHANGE_XP_CHANCE = 0.15;  // 15% chance to award XP on SPA nav
 
-  // Nav-only URL detection (mirrors 0.7.31 behavior). EAM's SPA rarely uses
-  // pushState/replaceState — most page transitions come through XHR calls to
-  // /web/base/<SCREEN>.xmlhttp endpoints. We classify by URL path and by
-  // resolved host so relative screen codes (USRTAB, USAGE, ...) still count.
+  // EAM's SPA rarely uses pushState/replaceState — most page transitions
+  // come through XHR calls to /web/base/<SCREEN>.xmlhttp endpoints. We
+  // classify by URL path and by resolved host so relative screen codes
+  // (USRTAB, USAGE, ...) still count.
   const EAM_API_URL_RE   = /\/web\/base\/[A-Za-z0-9_]+\.xmlhttp/i;
   const EAM_HEARTBEAT_RE = /(?:\/web\/base\/)?(?:SESSION|BSFOOTR|KEEPALIVE|BSTIMR|IDLTIMR)(?:\.xmlhttp)?(?:$|[?&])/i;
   const EAM_HOST_RE      = /(?:^|\.)eam\.(?:hxgnsmartcloud\.com|aws\.a2z\.com)$/i;
@@ -313,8 +313,8 @@
   // MULTI-TAB SYNC — other tabs pick up state changes in real time
   // ================================================================
   // Cross-tab installed-version detection: any tab that reboots with a newer
-  // script writes its LOCAL_VERSION to K.installedVersion. Older tabs listen and
-  // surface a "reload to use vX.Y.Z" prompt in place of the GitHub update button.
+  // script writes its LOCAL_VERSION to K.installedVersion. Older tabs listen so
+  // they can hide their own update button once a newer version is live elsewhere.
   const bumpInstalledVersion = () => {
     try {
       const stored = readRaw(K.installedVersion);
@@ -326,7 +326,7 @@
       } else if (cmpVersion(parsed, LOCAL_VERSION) > 0) {
         updateInfo.newerLocalVersion = parsed;
         if (prev !== parsed) {
-          vlog('[APM RPG] a newer version (' + parsed + ') is installed; reload to activate');
+          vlog('[APM RPG] a newer version (' + parsed + ') is installed elsewhere; hiding update button');
         }
       } else {
         updateInfo.newerLocalVersion = null;
@@ -439,9 +439,8 @@
   //      same way and it bypasses history/hashchange handlers
   //   3. Also sets a guard flag so double-triggers can't happen
   //
-  // We copy that pattern here with multiple fallbacks. Every attempt is
-  // logged — if it still fails, open devtools and paste the [APM RPG] lines
-  // so we can see which path was reached and what threw.
+  // We copy that pattern here with multiple fallbacks; each attempt is
+  // logged for debugging if reset gets stuck.
   const RELOAD_URL = 'https://us1.eam.hxgnsmartcloud.com/web/base/logindisp?tenant=AMAZONRMENA_PRD';
   const safeReload = () => {
     if (typeof window !== 'undefined' && window.__apmRpgRedirecting) {
@@ -957,7 +956,7 @@
     el.panelWrap.appendChild(el.panelTab);
     el.panelWrap.appendChild(el.panel);
     root.appendChild(el.panelWrap);
-    // Floating update toast — appears above the panel when a newer version is on GitHub.
+    // Small update toast that pulses above the panel when a newer version is on GitHub.
     el.updateBtn = $('button', {
       class: 'rpg-update-toast',
       type: 'button',
@@ -1049,10 +1048,9 @@
     el.xpTxt.textContent = 'EXP ' + state.player.xp + ' / ' + need;
     if (el.hidePetsBtn) el.hidePetsBtn.textContent = state.player.hideRoamers ? 'Show Pets' : 'Hide Pets';
     if (el.updateBtn) {
-      // Show UPDATE only when the GitHub check found something newer AND this
-      // tab is still running the older version AND the panel isn't collapsed.
-      // If another tab has already installed the newer version (newerLocalVersion),
-      // treat that as "handled" and hide the button — no RELOAD prompt.
+      // Show UPDATE only when the GitHub check found something newer, this
+      // tab is still on the older version, and the panel isn't collapsed.
+      // If another tab has already installed the newer version, hide the button.
       const shouldShow = updateInfo.available
         && updateInfo.latest
         && !updateInfo.newerLocalVersion
@@ -1838,9 +1836,9 @@
     document.body.appendChild(modal);
   };
 
-  // Periodic polling: try both the GitHub update fetch (rate-limited internally)
-  // and the installed-version re-check. Also runs on tab visibility change so a
-  // tab that has been idle picks up updates the moment it's focused again.
+  // Periodic polling: try the GitHub update fetch (rate-limited to 24 h)
+  // and re-check the cross-tab installed version. Also fires on tab refocus
+  // so idle tabs pick up new versions the moment they come back into view.
   const startSyncPolling = () => {
     const tick = () => { try { checkForUpdate(false); } catch (e) {} bumpInstalledVersion(); };
     setInterval(tick, UPDATE_POLL_INTERVAL_MS);
