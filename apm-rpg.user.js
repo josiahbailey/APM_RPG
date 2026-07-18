@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      1.0.13
+// @version      1.0.14
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -408,6 +408,19 @@
   };
   const charById = (id) => CHARACTERS.find(c => c.id === id) || CHARACTERS[0];
   const petById = (id) => PETS.find(p => p.id === id);
+
+  // Rarity-driven size multipliers. Both scale with rarity tier (1..5):
+  //   Sprite scale grows +0.10 per tier over Common (1.0, 1.1, 1.2, 1.3, 1.4)
+  //   Catch-ring scale grows +0.05 per tier over Common (1.0, 1.05, 1.10, 1.15, 1.20)
+  // Consumed via CSS custom properties --rpg-scale / --rpg-catch-scale.
+  const rarityScale = (rarity) => {
+    const m = RARITY_META[rarity];
+    return 1 + 0.1 * (((m && m.tier) || 1) - 1);
+  };
+  const rarityCatchScale = (rarity) => {
+    const m = RARITY_META[rarity];
+    return 1 + 0.05 * (((m && m.tier) || 1) - 1);
+  };
   const instanceById = (iid) => state.collection.find(i => i.instanceId === iid);
   const rand = (a, b) => a + Math.random() * (b - a);
   const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
@@ -767,10 +780,10 @@
     '.rpg-dex{max-width:620px;width:calc(100vw - 40px);text-align:left;padding:26px 32px}',
     '.rpg-dex-list{max-height:55vh;overflow-y:auto}',
     '.rpg-roam{position:fixed;z-index:2147482900;pointer-events:none;transition:left 10s linear,top 10s linear}',
-    '.rpg-roam img{width:64px;height:64px;object-fit:contain;filter:drop-shadow(0 4px 6px rgba(0,0,0,0.4))}',
+    '.rpg-roam img{width:calc(64px * var(--rpg-scale, 1));height:calc(64px * var(--rpg-scale, 1));object-fit:contain;filter:drop-shadow(0 4px 6px rgba(0,0,0,0.4))}',
     '.rpg-roam .label{font-size:11px;text-align:center;color:#fff;text-shadow:0 1px 2px #000,0 0 4px #000}',
     '.rpg-wild{position:fixed;z-index:2147483100;cursor:pointer;transition:left 3s linear,top 3s linear,transform 300ms}',
-    '.rpg-wild img{width:96px;height:96px;object-fit:contain;filter:drop-shadow(0 0 12px gold)}',
+    '.rpg-wild img{width:calc(96px * var(--rpg-scale, 1));height:calc(96px * var(--rpg-scale, 1));object-fit:contain;filter:drop-shadow(0 0 12px gold)}',
     '.rpg-wild .label{text-align:center;font-size:12px;color:gold;text-shadow:0 1px 2px #000;font-weight:700}',
     '@keyframes rpgLevelUp{0%{transform:scale(1);filter:brightness(1)}30%{transform:scale(1.4);filter:brightness(2) drop-shadow(0 0 12px gold)}100%{transform:scale(1);filter:brightness(1)}}',
     '.rpg-levelup-anim{animation:rpgLevelUp 900ms ease-out}',
@@ -787,7 +800,7 @@
     '@keyframes rpgWildPulse{0%{transform:scale(1)}100%{transform:scale(1.06)}}',
     // ── Wild-pet catch UI ──────────────────────────────────────────
     '.rpg-wild.rpg-catchable{cursor:pointer}',
-    '.rpg-wild.rpg-catchable::before{content:"";position:absolute;left:50%;top:55%;width:130px;height:130px;margin:-65px 0 0 -65px;border:3px dashed gold;border-radius:50%;pointer-events:none;box-sizing:border-box;animation:rpgRingSpin 4s linear infinite;opacity:0.85}',
+    '.rpg-wild.rpg-catchable::before{content:"";position:absolute;left:50%;top:55%;width:calc(130px * var(--rpg-catch-scale, 1));height:calc(130px * var(--rpg-catch-scale, 1));margin:calc(-65px * var(--rpg-catch-scale, 1)) 0 0 calc(-65px * var(--rpg-catch-scale, 1));border:3px dashed gold;border-radius:50%;pointer-events:none;box-sizing:border-box;animation:rpgRingSpin 4s linear infinite;opacity:0.85}',
     '@keyframes rpgRingSpin{to{transform:rotate(360deg)}}',
     '.rpg-wild .catch-hint{text-align:center;color:gold;font-weight:800;font-size:14px;text-shadow:0 1px 2px #000,0 0 6px #000;margin-top:6px;letter-spacing:2px;animation:rpgCatchBounce 900ms ease-in-out infinite alternate}',
     '@keyframes rpgCatchBounce{from{transform:translateY(0);opacity:0.85}to{transform:translateY(-4px);opacity:1}}',
@@ -1641,6 +1654,7 @@
     const el = $('div', { class: cls });
     el.appendChild($('div', { class: 'label', html: (variantBadge(v) ? variantBadge(v) + ' ' : '') + p.name }));
     el.appendChild($('img', { src: petImg(p, v) }));
+    el.style.setProperty('--rpg-scale', String(rarityScale(p.rarity)));
     const initPos = pickQuadrantPoint(80, 80, -9999, -9999, 0);
     el.style.left = Math.floor(initPos.x) + 'px';
     el.style.top  = Math.floor(initPos.y) + 'px';
@@ -1693,6 +1707,8 @@
     wildEl.appendChild($('div', { class: 'label', html: vLabel }));
     wildEl.appendChild($('img', { src: petImg(wildPet, wildVariant) }));
     wildEl.appendChild($('div', { class: 'catch-hint', html: 'CATCH!' }));
+    wildEl.style.setProperty('--rpg-scale', String(rarityScale(wildPet.rarity)));
+    wildEl.style.setProperty('--rpg-catch-scale', String(rarityCatchScale(wildPet.rarity)));
     const wInit = pickQuadrantPoint(160, 200, -9999, -9999, 0);
     wildEl.style.left = Math.floor(wInit.x) + 'px';
     wildEl.style.top  = Math.floor(wInit.y) + 'px';
