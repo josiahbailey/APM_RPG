@@ -623,7 +623,15 @@
     if (!variant || variant === 'normal') return '';
     return ' rpg-' + variant + (needsVariantFallback(pet, variant) ? ' rpg-' + variant + '-fallback' : '');
   };
+  // One-shot override: if set to a variant name, the next rollVariant() call
+  // returns it directly and clears the flag. Used by APM_RPG.spawnVariant().
+  let _forcedVariant = null;
   const rollVariant = () => {
+    if (_forcedVariant) {
+      const v = _forcedVariant;
+      _forcedVariant = null;
+      return v;
+    }
     const r = Math.random();
     let acc = 0;
     for (const v of VARIANT_ORDER) {
@@ -1901,7 +1909,18 @@
     grantXP: (n) => grantPlayerXP(n || 50, 'debug'),
     setLevel: (lvl) => { state.player.level = Math.max(1, lvl|0); state.player.xp = 0; persistPlayer(); renderPanel(); respawnAllRoamers(); },
     spawn: () => spawnWild(),
-    spawnVariant: (v) => { const orig = Math.random; const targetChance = { rainbow: 0, hollow: VARIANT_META.rainbow.chance, shiny: VARIANT_META.rainbow.chance + VARIANT_META.hollow.chance }[v]; Math.random = (() => { let n = 0; return () => n++ === 0 ? (targetChance !== undefined ? targetChance : 0.99) : orig(); })(); spawnWild(); Math.random = orig; },
+    spawnVariant: (v) => {
+      const valid = ['normal', 'shiny', 'hollow', 'rainbow'];
+      if (valid.indexOf(v) === -1) { console.warn('[APM RPG] unknown variant:', v, '(use one of', valid.join(', ') + ')'); return; }
+      // Despawn any existing wild first so spawnWild()'s early-return guard
+      // doesn't leave _forcedVariant set (which would pollute the next natural spawn).
+      despawnWild();
+      _forcedVariant = v;
+      spawnWild();
+      // Belt-and-suspenders: if spawnWild bailed for any other reason,
+      // clear the flag so the natural roll path stays clean.
+      _forcedVariant = null;
+    },
     rollSpawn: () => rollWildSpawn(),
     despawn: despawnWild,
     detect: () => { const raw = detectUsername(); const norm = normalizeAlias(raw); console.log('raw:', raw, '-> alias:', norm); return norm; },
