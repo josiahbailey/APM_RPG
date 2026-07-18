@@ -171,8 +171,8 @@
   // metadata block on update polls, then fetches the full file on install.
   const UPDATE_META_URL     = 'https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/apm-rpg.user.js';
   const UPDATE_DOWNLOAD_URL = 'https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/apm-rpg.user.js';
-  const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;  // 24 hours (rate limit; force=true bypasses)
-  const UPDATE_POLL_INTERVAL_MS  = 60 * 60 * 1000; // how often to *try* checks (each try respects the 24 h rate limit)
+  const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;  // 5 minutes (rate limit; force=true bypasses)
+  const UPDATE_POLL_INTERVAL_MS  = 60 * 1000;      // how often to *try* checks (each try respects the 5 min rate limit)
   // Variant rarities. Each spawn independently rolls for the rarest tier down.
   // 'normal' is the fallthrough — all four are catch-rate multipliers over base.
   const VARIANT_META = {
@@ -533,7 +533,7 @@
     const now = Date.now();
     if (!force && (now - updateInfo.checkedAt) < UPDATE_CHECK_INTERVAL_MS) {
       const ageMin = Math.round((now - updateInfo.checkedAt) / 60000);
-      vlog('[APM RPG] update check rate-limited (last check ' + ageMin + ' min ago; 24h cooldown); use APM_RPG.checkUpdate() to force');
+      vlog('[APM RPG] update check rate-limited (last check ' + ageMin + ' min ago); use APM_RPG.checkUpdate() to force');
       return resolve({ skipped: 'rate-limit', local: LOCAL_VERSION, latest: updateInfo.latest, available: updateInfo.available });
     }
     try {
@@ -1836,7 +1836,7 @@
     document.body.appendChild(modal);
   };
 
-  // Periodic polling: try the GitHub update fetch (rate-limited to 24 h)
+  // Periodic polling: try the GitHub update fetch (rate-limited to 5 min)
   // and re-check the cross-tab installed version. Also fires on tab refocus
   // so idle tabs pick up new versions the moment they come back into view.
   const startSyncPolling = () => {
