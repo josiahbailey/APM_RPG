@@ -847,6 +847,7 @@
     '.rpg-menu-item{position:relative}',
     '.rpg-starter-modal .rpg-modal-inner{max-width:460px}',
     '.rpg-howto-modal .rpg-modal-inner{max-width:460px;text-align:center}',
+    '.rpg-howto-logo{width:84px;height:84px;display:block;margin:0 auto 6px;object-fit:contain;filter:drop-shadow(0 4px 12px rgba(255,209,102,0.35))}',
     '.rpg-howto-body{font-size:13px;color:#ddd;line-height:1.55;margin:8px 4px 18px;text-align:left}',
     '.rpg-howto-body b{color:#ffd166}',
     '.rpg-howto-btn{background:linear-gradient(180deg,#ffd166,#e5a935);color:#1a1a24;border:0;border-radius:8px;padding:10px 24px;font-weight:800;font-size:13px;letter-spacing:0.6px;cursor:pointer;font-family:inherit;box-shadow:0 4px 12px rgba(255,209,102,0.35)}',
@@ -1838,6 +1839,7 @@
     const greet = uname ? ('Welcome, ' + uname + '! ') : 'Welcome! ';
     const modal = $('div', { class: 'rpg-modal rpg-howto-modal' });
     const inner = $('div', { class: 'rpg-modal-inner' });
+    inner.appendChild($('img', { class: 'rpg-howto-logo', src: IMG_BASE + '/icon.png', alt: 'APM RPG' }));
     inner.appendChild($('h3', { html: 'HOW TO PLAY', style: { margin: '0 0 4px', color: '#ffd166' } }));
     inner.appendChild($('div', {
       class: 'rpg-howto-body',
