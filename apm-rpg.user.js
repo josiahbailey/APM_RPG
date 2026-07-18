@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      1.0.11
+// @version      1.0.12
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @match        https://*.eam.hxgnsmartcloud.com/*
@@ -104,28 +104,28 @@
     // ── Common (10) ─────────────────────────────────────────────
     { id: 'pt_bagroc',    name: 'Bagroc',    rarity: 'Common',    img: IMG_BASE + '/Pet_Images/Common/Bagroc.png'   },
     { id: 'pt_fasfox',    name: 'Fasfox',    rarity: 'Common',    img: IMG_BASE + '/Pet_Images/Common/Fasfox.png'   },
-    { id: 'pt_icedro',    name: 'Icedro',    rarity: 'Common',    img: IMG_BASE + '/Pet_Images/Common/Icedro.png'   },
+    { id: 'pt_icedro',    name: 'Chillup',   rarity: 'Common',    img: IMG_BASE + '/Pet_Images/Common/Chillup.png'  },
     { id: 'pt_mossmo',    name: 'Mossmo',    rarity: 'Common',    img: IMG_BASE + '/Pet_Images/Common/Mossmo.png'   },
     { id: 'pt_oinky',     name: 'Oinky',     rarity: 'Common',    img: IMG_BASE + '/Pet_Images/Common/Oinky.png'    },
     { id: 'pt_ribub',     name: 'Ribub',     rarity: 'Common',    img: IMG_BASE + '/Pet_Images/Common/Ribub.png'    },
     { id: 'pt_sanda',     name: 'Sanda',     rarity: 'Common',    img: IMG_BASE + '/Pet_Images/Common/Sanda.png'    },
-    { id: 'pt_sizzlo',    name: 'Sizzly',    rarity: 'Common',    img: IMG_BASE + '/Pet_Images/Common/Sizzlo.png'   },
+    { id: 'pt_sizzlo',    name: 'Sizzly',    rarity: 'Common',    img: IMG_BASE + '/Pet_Images/Common/Sizzly.png'   },
     { id: 'pt_sunbun',    name: 'Sunbun',    rarity: 'Common',    img: IMG_BASE + '/Pet_Images/Common/Sunbun.png'   },
-    { id: 'pt_windro',    name: 'Windro',    rarity: 'Common',    img: IMG_BASE + '/Pet_Images/Common/Windro.png'   },
+    { id: 'pt_windro',    name: 'Windree',   rarity: 'Common',    img: IMG_BASE + '/Pet_Images/Common/Windree.png'  },
     // ── Rare (6) ────────────────────────────────────────────────
     { id: 'pt_crystela',  name: 'Crystela',  rarity: 'Rare',      img: IMG_BASE + '/Pet_Images/Rare/Crystela.png'   },
     { id: 'pt_geckleaf',  name: 'Geckleaf',  rarity: 'Rare',      img: IMG_BASE + '/Pet_Images/Rare/Geckleaf.png'   },
     { id: 'pt_ironant',   name: 'Ironant',   rarity: 'Rare',      img: IMG_BASE + '/Pet_Images/Rare/Ironant.png'    },
     { id: 'pt_sparkeo',   name: 'Sparkeo',   rarity: 'Rare',      img: IMG_BASE + '/Pet_Images/Rare/Sparkeo.png'    },
-    { id: 'pt_stingdro',  name: 'Stingdro',  rarity: 'Rare',      img: IMG_BASE + '/Pet_Images/Rare/Stingdro.png'   },
+    { id: 'pt_stingdro',  name: 'Stinglet',  rarity: 'Rare',      img: IMG_BASE + '/Pet_Images/Rare/Stinglet.png'   },
     { id: 'pt_wolverice', name: 'Wolverice', rarity: 'Rare',      img: IMG_BASE + '/Pet_Images/Rare/Wolverice.png'  },
     // ── Epic (4) ────────────────────────────────────────────────
     { id: 'pt_blazlynx',  name: 'Blazlynx',  rarity: 'Epic',      img: IMG_BASE + '/Pet_Images/Epic/Blazlynx.png'   },
-    { id: 'pt_electral',  name: 'Electral',  rarity: 'Epic',      img: IMG_BASE + '/Pet_Images/Epic/Electral.png'   },
+    { id: 'pt_electral',  name: 'Voltwing',  rarity: 'Epic',      img: IMG_BASE + '/Pet_Images/Epic/Voltwing.png'   },
     { id: 'pt_swifteer',  name: 'Swifteer',  rarity: 'Epic',      img: IMG_BASE + '/Pet_Images/Epic/Swifteer.png'   },
     { id: 'pt_venoma',    name: 'Venoma',    rarity: 'Epic',      img: IMG_BASE + '/Pet_Images/Epic/Venoma.png'     },
     // ── Legendary (4) ───────────────────────────────────────────
-    { id: 'pt_flamdro',   name: 'Flamdro',   rarity: 'Legendary', img: IMG_BASE + '/Pet_Images/Legendary/Flamdro.png'  },
+    { id: 'pt_flamdro',   name: 'Cindrake',  rarity: 'Legendary', img: IMG_BASE + '/Pet_Images/Legendary/Cindrake.png' },
     { id: 'pt_shamera',   name: 'Shamera',   rarity: 'Legendary', img: IMG_BASE + '/Pet_Images/Legendary/Shamera.png'  },
     { id: 'pt_trenant',   name: 'Trenant',   rarity: 'Legendary', img: IMG_BASE + '/Pet_Images/Legendary/Trenant.png'  },
     { id: 'pt_wyrmra',    name: 'Wyrmra',    rarity: 'Legendary', img: IMG_BASE + '/Pet_Images/Legendary/Wyrmra.png'   },
