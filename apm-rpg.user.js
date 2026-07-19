@@ -1703,11 +1703,11 @@
       const dy = e.clientY - downY;
       if (!moved && Math.hypot(dx, dy) > GRAB_MIN_MOVE_PX) moved = true;
       if (!moved) return;
-      const nx = startL + dx;
-      const ny = startT + dy;
+      const c = rmCtx(i);
+      const nx = e.clientX - c.grabOffsetX;
+      const ny = e.clientY - c.grabOffsetY;
       el.style.left = nx + 'px';
       el.style.top  = ny + 'px';
-      const c = rmCtx(i);
       c.moveHistory.push({ x: nx, y: ny, t: Date.now() });
       if (c.moveHistory.length > 6) c.moveHistory.shift();
     };
@@ -1736,16 +1736,27 @@
     el.addEventListener('mousedown', (e) => {
       if (e.button !== 0) return;
       e.preventDefault();
+      // Read the LIVE on-screen rect (accounts for in-flight CSS transitions).
+      // Using style.left/top would snap to the transition's target instead of
+      // where the sprite is currently rendered, causing a visible teleport.
+      const rect = el.getBoundingClientRect();
+      startL = rect.left;
+      startT = rect.top;
+      // Freeze position at the rendered spot before disabling transitions,
+      // so the sprite doesn't jump to its old destination on the next frame.
+      el.style.left = startL + 'px';
+      el.style.top  = startT + 'px';
       downX = e.clientX;
       downY = e.clientY;
-      startL = parseFloat(el.style.left) || 0;
-      startT = parseFloat(el.style.top)  || 0;
       moved = false;
       downTime = Date.now();
       const c = rmCtx(i);
       c.state = 'grabbed';
       c.grabbedAt = downTime;
       c.moveHistory = [{ x: startL, y: startT, t: downTime }];
+      // Offset from cursor to sprite top-left — locks the exact grab point.
+      c.grabOffsetX = e.clientX - startL;
+      c.grabOffsetY = e.clientY - startT;
       el.classList.add('rpg-grabbed');
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
