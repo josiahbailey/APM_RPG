@@ -150,7 +150,7 @@
   };
 
   const NAV_COOLDOWN_MS       = 2000;
-  const PAGE_CHANGE_XP_CHANCE = 0.15;  // 15% chance to award XP on SPA nav
+  const PAGE_CHANGE_XP_CHANCE = 0.025; // 2.5% chance to award XP on SPA nav
 
   // EAM's SPA rarely uses pushState/replaceState — most page transitions
   // come through XHR calls to /web/base/<SCREEN>.xmlhttp endpoints. We
@@ -167,7 +167,7 @@
 
 
   const xpToNextLevel = (level) => Math.floor(100 * Math.pow(level, 1.35));
-  const WILD_SPAWN_CHANCE  = 0.05;  // rolled once per page load / SPA nav
+  const WILD_SPAWN_CHANCE  = 0.025; // rolled once per page load / SPA nav
   const CATCHERS_PER_SPAWN = 3;
   // Hosted at https://github.com/josiahbailey/APM_RPG (public GitHub).
   // Same URL for @updateURL and @downloadURL — Tampermonkey only reads the
@@ -774,6 +774,7 @@
     '.rpg-right-col{display:none}',
     '.rpg-version{font-size:9px;color:#666;text-align:center;letter-spacing:0.5px;font-weight:600;user-select:text;margin-top:auto}',
     '.rpg-reset-btn{position:fixed;left:12px;bottom:12px;z-index:2147483000;font-size:9px;padding:3px 7px;background:rgba(40,0,0,0.8);color:#f77;border:1px solid #633;border-radius:4px;cursor:pointer;opacity:0.5}.rpg-reset-btn:hover{opacity:1;background:#400}',
+    '.rpg-help-btn{position:fixed;left:60px;bottom:12px;z-index:2147483000;font-size:9px;padding:3px 7px;background:rgba(40,30,0,0.8);color:#fd7;border:1px solid #663;border-radius:4px;cursor:pointer;opacity:0.5}.rpg-help-btn:hover{opacity:1;background:#420}',
     '.rpg-update-toast{position:fixed;right:16px;bottom:120px;z-index:2147483001;padding:4px 10px;font-size:10px;font-weight:800;letter-spacing:0.4px;border-radius:6px;cursor:pointer;background:linear-gradient(135deg,#22c55e,#15803d);color:#fff;border:1px solid #16a34a;box-shadow:0 2px 8px rgba(34,197,94,0.35);animation:rpgUpdatePulse 2s ease-in-out infinite;transition:transform 0.15s ease}.rpg-update-toast:hover{filter:brightness(1.15);transform:translateY(-1px)}.rpg-update-toast:active{transform:translateY(0)}',
     '@keyframes rpgUpdatePulse{0%,100%{box-shadow:0 2px 8px rgba(34,197,94,0.35)}50%{box-shadow:0 2px 10px rgba(34,197,94,0.7),0 0 0 4px rgba(34,197,94,0.12)}}',
     '.rpg-menu{position:fixed;right:16px;bottom:110px;z-index:2147483001;background:rgba(20,20,28,0.97);border:1px solid #3b3b48;border-radius:12px;padding:12px;color:#eee;max-width:380px;max-height:60vh;overflow-y:auto;box-shadow:0 10px 30px rgba(0,0,0,0.6)}',
@@ -1010,6 +1011,18 @@
       }
     });
     root.appendChild(el.resetBtn);
+    el.helpBtn = $('button', {
+      class: 'rpg-help-btn',
+      type: 'button',
+      html: 'How to Play',
+      title: 'Show the how-to-play guide again',
+      onclick: (e) => {
+        if (e && e.preventDefault) e.preventDefault();
+        if (e && e.stopPropagation) e.stopPropagation();
+        showHowToModal();
+      }
+    });
+    root.appendChild(el.helpBtn);
   };
 
   const updateSlots = () => {

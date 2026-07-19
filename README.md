@@ -38,7 +38,7 @@ XP comes from two sources:
 
 | Source | XP | Trigger |
 |---|---:|---|
-| **Nav activity** | 5 | 15% chance per SPA nav event (see below) |
+| **Nav activity** | 5 | 2.5% chance per SPA nav event (see below) |
 | **Catch a wild pet** | 5 – 500 | Rarity-scaled, see rarity table |
 
 XP required to reach level *n* is `floor(100 * n^1.35)`, so climbing gets steadily slower.
@@ -54,11 +54,11 @@ EAM is a same-origin-iframe SPA that rarely uses `pushState`. The script hooks f
 
 Heartbeat / session-keepalive endpoints (`SESSION`, `BSFOOTR`, `KEEPALIVE`, `BSTIMR`, `IDLTIMR`) are filtered out so idle tabs don't grind XP.
 
-A 2 s cooldown prevents burst navigations from double-counting. Each qualifying event rolls a 15% chance to grant XP and independently rolls a wild-spawn check.
+A 2 s cooldown prevents burst navigations from double-counting. Each qualifying event rolls a 2.5% chance to grant XP and independently rolls a wild-spawn check.
 
 ## Wild pets
 
-Wild pets spawn on page load and on qualifying nav events, at a 5% roll each time. A spawn:
+Wild pets spawn on page load and on qualifying nav events, at a 2.5% roll each time. A spawn:
 
 - Picks a pet using weighted-random selection (see rarity table)
 - Independently rolls for a Shiny / Hollow / Rainbow variant
