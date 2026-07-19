@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      1.1.0
+// @version      1.1.1
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @icon         https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/icon.png
@@ -1662,6 +1662,7 @@
     el.classList.add('rpg-poking');
     setTimeout(() => { try { el.classList.remove('rpg-poking'); } catch (e) {} }, POKE_ANIM_MS + 40);
   };
+  const TOSS_BOUNCE_DAMPING = 0.55; // energy retained after each wall hit
   const startToss = (i, vx, vy) => {
     const el = roamers[i]; if (!el) return;
     const ctx = rmCtx(i);
@@ -1670,12 +1671,21 @@
     el.classList.add('rpg-tossing');
     let x = parseFloat(el.style.left) || 0;
     let y = parseFloat(el.style.top) || 0;
+    // Cache sprite dimensions once — they don't change mid-toss (scale is per-rarity).
+    const rect = el.getBoundingClientRect();
+    const w = rect.width, h = rect.height;
     let lastT = performance.now();
     const step = (now) => {
       if (!roamers[i] || rmCtx(i).state !== 'tossing') return;
       const dt = now - lastT; lastT = now;
+      const vw = window.innerWidth, vh = window.innerHeight;
       x += vx * dt;
       y += vy * dt;
+      // Bounce off viewport edges with damping.
+      if (x < 0)          { x = 0;           vx = -vx * TOSS_BOUNCE_DAMPING; }
+      else if (x + w > vw){ x = vw - w;      vx = -vx * TOSS_BOUNCE_DAMPING; }
+      if (y < 0)          { y = 0;           vy = -vy * TOSS_BOUNCE_DAMPING; }
+      else if (y + h > vh){ y = vh - h;      vy = -vy * TOSS_BOUNCE_DAMPING; }
       vx *= TOSS_DECAY;
       vy *= TOSS_DECAY;
       el.style.left = Math.floor(x) + 'px';
