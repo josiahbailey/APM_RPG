@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      1.1.1
+// @version      1.1.2
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @icon         https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/icon.png
@@ -167,7 +167,7 @@
 
 
   const xpToNextLevel = (level) => Math.floor(100 * Math.pow(level, 1.35));
-  const WILD_SPAWN_CHANCE  = 0.025; // rolled once per page load / SPA nav
+  const WILD_SPAWN_CHANCE  = 0.02; // rolled once per page load / SPA nav
   const CATCHERS_PER_SPAWN = 3;
   // Hosted at https://github.com/josiahbailey/APM_RPG (public GitHub).
   // Same URL for @updateURL and @downloadURL — Tampermonkey only reads the
@@ -772,7 +772,7 @@
     '.rpg-xp-text{font-size:10px;color:#9aa;margin-top:2px}',
     '.rpg-btn{padding:4px 8px;font-size:10px;font-weight:700;border:1px solid #555;border-radius:5px;background:#2a2a36;color:#ffd166;cursor:pointer}.rpg-btn:hover{background:#3b3b48}',
     '.rpg-right-col{display:none}',
-    '.rpg-version{font-size:9px;color:#666;text-align:center;letter-spacing:0.5px;font-weight:600;user-select:text;margin-top:auto}',
+    '.rpg-version{font-size:9px;color:#ffd166;text-align:center;letter-spacing:0.5px;font-weight:700;user-select:text;margin-top:auto;text-shadow:0 1px 2px #000,0 0 3px #000}',
     '.rpg-reset-btn{position:fixed;left:12px;bottom:12px;z-index:2147483000;font-size:9px;padding:3px 7px;background:rgba(40,0,0,0.8);color:#f77;border:1px solid #633;border-radius:4px;cursor:pointer;opacity:0.5}.rpg-reset-btn:hover{opacity:1;background:#400}',
     '.rpg-help-btn{position:fixed;left:60px;bottom:12px;z-index:2147483000;font-size:9px;padding:3px 7px;background:rgba(40,30,0,0.8);color:#fd7;border:1px solid #663;border-radius:4px;cursor:pointer;opacity:0.5}.rpg-help-btn:hover{opacity:1;background:#420}',
     '.rpg-update-toast{position:fixed;right:16px;bottom:120px;z-index:2147483001;padding:4px 10px;font-size:10px;font-weight:800;letter-spacing:0.4px;border-radius:6px;cursor:pointer;background:linear-gradient(135deg,#22c55e,#15803d);color:#fff;border:1px solid #16a34a;box-shadow:0 2px 8px rgba(34,197,94,0.35);animation:rpgUpdatePulse 2s ease-in-out infinite;transition:transform 0.15s ease}.rpg-update-toast:hover{filter:brightness(1.15);transform:translateY(-1px)}.rpg-update-toast:active{transform:translateY(0)}',
