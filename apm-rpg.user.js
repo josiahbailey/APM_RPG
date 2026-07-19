@@ -789,7 +789,13 @@
     '.rpg-empty-msg{font-size:12px;color:#888;padding:12px 0}',
     '.rpg-dex{max-width:620px;width:calc(100vw - 40px);text-align:left;padding:26px 32px}',
     '.rpg-dex-list{max-height:55vh;overflow-y:auto}',
-    '.rpg-roam{position:fixed;z-index:2147482900;pointer-events:none;transition:left 10s linear,top 10s linear}',
+    '.rpg-roam{position:fixed;z-index:2147482900;pointer-events:auto;cursor:pointer;transition:left 10s linear,top 10s linear}',
+    '.rpg-roam.rpg-grabbed,.rpg-roam.rpg-tossing{transition:none!important}',
+    '.rpg-roam.rpg-grabbed{cursor:grabbing;z-index:2147482950}',
+    '.rpg-roam.rpg-grabbed img{animation:rpgRoamWiggle 300ms ease-in-out infinite alternate}',
+    '@keyframes rpgRoamWiggle{0%{transform:rotate(-6deg) scale(1)}50%{transform:rotate(6deg) scale(1.06)}100%{transform:rotate(-4deg) scale(0.98)}}',
+    '.rpg-roam.rpg-poking img{animation:rpgRoamPoke 480ms cubic-bezier(0.36,0.07,0.19,0.97) both}',
+    '@keyframes rpgRoamPoke{0%{transform:rotate(0) scale(1)}18%{transform:rotate(-12deg) scale(1.08)}36%{transform:rotate(10deg) scale(1.05)}54%{transform:rotate(-6deg) scale(1.03)}72%{transform:rotate(4deg) scale(1.01)}100%{transform:rotate(0) scale(1)}}',
     '.rpg-roam img{width:calc(64px * var(--rpg-scale, 1));height:calc(64px * var(--rpg-scale, 1));object-fit:contain;filter:drop-shadow(0 4px 6px rgba(0,0,0,0.4))}',
     '.rpg-roam .label{font-size:11px;text-align:center;color:#fff;text-shadow:0 1px 2px #000,0 0 4px #000}',
     '.rpg-wild{position:fixed;z-index:2147483100;cursor:pointer;transition:left 3s linear,top 3s linear,transform 300ms}',
@@ -1640,13 +1646,121 @@
   };
   window.addEventListener('resize', () => { if (boundaryVizOn) rebuildBoundaryViz(); });
   // ================================================================
+  // ROAMER GRAB / TOSS / POKE INTERACTION
+  // ================================================================
+  const GRAB_MIN_MOVE_PX = 4;    // below this = click, not drag
+  const TOSS_MIN_SPEED   = 0.30; // px/ms — release faster than this triggers a toss
+  const TOSS_DECAY       = 0.94; // per-frame velocity scale
+  const POKE_ANIM_MS     = 480;  // matches rpgRoamPoke keyframe duration
+  const roamerCtx = [null, null, null];
+  const rmCtx = (i) => roamerCtx[i] || (roamerCtx[i] = { state: 'idle', grabbedAt: 0, moveHistory: [] });
+  const clearRmCtx = (i) => { roamerCtx[i] = null; };
+  const playPokeAnim = (el) => {
+    if (!el) return;
+    el.classList.remove('rpg-poking');
+    void el.offsetWidth; // force reflow so the animation restarts on rapid clicks
+    el.classList.add('rpg-poking');
+    setTimeout(() => { try { el.classList.remove('rpg-poking'); } catch (e) {} }, POKE_ANIM_MS + 40);
+  };
+  const startToss = (i, vx, vy) => {
+    const el = roamers[i]; if (!el) return;
+    const ctx = rmCtx(i);
+    ctx.state = 'tossing';
+    el.classList.remove('rpg-grabbed');
+    el.classList.add('rpg-tossing');
+    let x = parseFloat(el.style.left) || 0;
+    let y = parseFloat(el.style.top) || 0;
+    let lastT = performance.now();
+    const step = (now) => {
+      if (!roamers[i] || rmCtx(i).state !== 'tossing') return;
+      const dt = now - lastT; lastT = now;
+      x += vx * dt;
+      y += vy * dt;
+      vx *= TOSS_DECAY;
+      vy *= TOSS_DECAY;
+      el.style.left = Math.floor(x) + 'px';
+      el.style.top  = Math.floor(y) + 'px';
+      const speed = Math.hypot(vx, vy);
+      if (speed > 0.04) requestAnimationFrame(step);
+      else endGrab(i);
+    };
+    requestAnimationFrame(step);
+  };
+  const endGrab = (i) => {
+    const ctx = rmCtx(i);
+    ctx.state = 'idle';
+    ctx.grabbedAt = 0;
+    ctx.moveHistory = [];
+    const el = roamers[i];
+    if (el) { el.classList.remove('rpg-grabbed'); el.classList.remove('rpg-tossing'); }
+    // Kick a boundary-safe move so the roamer drifts back into the arc
+    setTimeout(() => { if (roamers[i] && rmCtx(i).state === 'idle') moveRoamerAt(i); }, 120);
+  };
+  const attachGrab = (el, i) => {
+    let downX = 0, downY = 0, startL = 0, startT = 0, moved = false, downTime = 0;
+    const onMove = (e) => {
+      const dx = e.clientX - downX;
+      const dy = e.clientY - downY;
+      if (!moved && Math.hypot(dx, dy) > GRAB_MIN_MOVE_PX) moved = true;
+      if (!moved) return;
+      const nx = startL + dx;
+      const ny = startT + dy;
+      el.style.left = nx + 'px';
+      el.style.top  = ny + 'px';
+      const c = rmCtx(i);
+      c.moveHistory.push({ x: nx, y: ny, t: Date.now() });
+      if (c.moveHistory.length > 6) c.moveHistory.shift();
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      const c = rmCtx(i);
+      if (moved) {
+        const hist = c.moveHistory;
+        let tossed = false;
+        if (hist.length >= 2) {
+          const a = hist[0], b = hist[hist.length - 1];
+          const dt = Math.max(b.t - a.t, 1);
+          const vx = (b.x - a.x) / dt;
+          const vy = (b.y - a.y) / dt;
+          const speed = Math.hypot(vx, vy);
+          if (speed > TOSS_MIN_SPEED) { tossed = true; startToss(i, vx, vy); }
+        }
+        if (!tossed) endGrab(i);
+      } else {
+        // Click = poke: just play the squirm animation
+        playPokeAnim(el);
+        endGrab(i);
+      }
+    };
+    el.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      e.preventDefault();
+      downX = e.clientX;
+      downY = e.clientY;
+      startL = parseFloat(el.style.left) || 0;
+      startT = parseFloat(el.style.top)  || 0;
+      moved = false;
+      downTime = Date.now();
+      const c = rmCtx(i);
+      c.state = 'grabbed';
+      c.grabbedAt = downTime;
+      c.moveHistory = [{ x: startL, y: startT, t: downTime }];
+      el.classList.add('rpg-grabbed');
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  };
+
+  // ================================================================
   // ROAMING PETS (up to 3, one per unlocked active slot)
   // ================================================================
   const roamers = [null, null, null];
-  const removeRoamerAt = (i) => { if (roamers[i]) { roamers[i].remove(); roamers[i] = null; } };
+  const removeRoamerAt = (i) => { if (roamers[i]) { roamers[i].remove(); roamers[i] = null; } clearRmCtx(i); };
   const removeAllRoamers = () => { for (let i = 0; i < roamers.length; i++) removeRoamerAt(i); };
   const moveRoamerAt = (i) => {
     const r = roamers[i]; if (!r) return;
+    if (rmCtx(i).state !== 'idle') return; // don't fight grab/toss
     const curX = parseFloat(r.style.left) || 0;
     const curY = parseFloat(r.style.top) || 0;
     const t = pickQuadrantPoint(80, 80, curX, curY, 200);
@@ -1673,6 +1787,8 @@
     el.style.top  = Math.floor(initPos.y) + 'px';
     document.body.appendChild(el);
     roamers[i] = el;
+    roamerCtx[i] = { state: 'idle', grabbedAt: 0, moveHistory: [] };
+    attachGrab(el, i);
     requestAnimationFrame(() => requestAnimationFrame(() => moveRoamerAt(i)));
   };
   const respawnAllRoamers = () => {
@@ -1686,6 +1802,7 @@
       moveRoamerAt(i);
     }
   }, 10000);
+
 
   // ================================================================
   // WILD SPAWN + CATCH
