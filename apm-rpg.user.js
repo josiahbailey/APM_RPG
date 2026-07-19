@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      1.0.18
+// @version      1.0.19
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @icon         https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/icon.png
@@ -150,7 +150,7 @@
   };
 
   const NAV_COOLDOWN_MS       = 2000;
-  const PAGE_CHANGE_XP_CHANCE = 0.025; // 2.5% chance to award XP on SPA nav
+  const PAGE_CHANGE_XP_CHANCE = 0.10;  // 10% chance to award XP on SPA nav
 
   // EAM's SPA rarely uses pushState/replaceState — most page transitions
   // come through XHR calls to /web/base/<SCREEN>.xmlhttp endpoints. We
