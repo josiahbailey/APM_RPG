@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      1.1.2
+// @version      1.1.5
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @icon         https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/icon.png
@@ -772,7 +772,7 @@
     '.rpg-xp-text{font-size:10px;color:#9aa;margin-top:2px}',
     '.rpg-btn{padding:4px 8px;font-size:10px;font-weight:700;border:1px solid #555;border-radius:5px;background:#2a2a36;color:#ffd166;cursor:pointer}.rpg-btn:hover{background:#3b3b48}',
     '.rpg-right-col{display:none}',
-    '.rpg-version{font-size:9px;color:#ffd166;text-align:center;letter-spacing:0.5px;font-weight:700;user-select:text;margin-top:auto;text-shadow:0 1px 2px #000,0 0 3px #000}',
+    '.rpg-version{font-size:9px;color:rgba(255,209,102,0.5);text-align:center;letter-spacing:0.5px;font-weight:600;user-select:text;margin-top:auto;text-shadow:0 1px 1px rgba(0,0,0,0.5)}',
     '.rpg-reset-btn{position:fixed;left:12px;bottom:12px;z-index:2147483000;font-size:9px;padding:3px 7px;background:rgba(40,0,0,0.8);color:#f77;border:1px solid #633;border-radius:4px;cursor:pointer;opacity:0.5}.rpg-reset-btn:hover{opacity:1;background:#400}',
     '.rpg-help-btn{position:fixed;left:60px;bottom:12px;z-index:2147483000;font-size:9px;padding:3px 7px;background:rgba(40,30,0,0.8);color:#fd7;border:1px solid #663;border-radius:4px;cursor:pointer;opacity:0.5}.rpg-help-btn:hover{opacity:1;background:#420}',
     '.rpg-update-toast{position:fixed;right:16px;bottom:120px;z-index:2147483001;padding:4px 10px;font-size:10px;font-weight:800;letter-spacing:0.4px;border-radius:6px;cursor:pointer;background:linear-gradient(135deg,#22c55e,#15803d);color:#fff;border:1px solid #16a34a;box-shadow:0 2px 8px rgba(34,197,94,0.35);animation:rpgUpdatePulse 2s ease-in-out infinite;transition:transform 0.15s ease}.rpg-update-toast:hover{filter:brightness(1.15);transform:translateY(-1px)}.rpg-update-toast:active{transform:translateY(0)}',
@@ -799,11 +799,12 @@
     '.rpg-roam img{width:calc(64px * var(--rpg-scale, 1));height:calc(64px * var(--rpg-scale, 1));object-fit:contain;filter:drop-shadow(0 4px 6px rgba(0,0,0,0.4))}',
     '.rpg-roam .label{font-size:11px;text-align:center;color:#fff;text-shadow:0 1px 2px #000,0 0 4px #000}',
     '.rpg-wild{position:fixed;z-index:2147483100;cursor:pointer;transition:left 3s linear,top 3s linear,transform 300ms}',
-    '.rpg-wild img{width:calc(96px * var(--rpg-scale, 1));height:calc(96px * var(--rpg-scale, 1));object-fit:contain;filter:drop-shadow(0 0 12px gold)}',
-    '.rpg-wild .label{text-align:center;font-size:12px;color:gold;text-shadow:0 1px 2px #000;font-weight:700}',
+    '.rpg-wild img{width:calc(96px * var(--rpg-scale, 1));height:calc(96px * var(--rpg-scale, 1));object-fit:contain;filter:drop-shadow(0 0 12px var(--rpg-rarity-color, gold))}',
+    '.rpg-wild .label{text-align:center;font-size:12px;color:var(--rpg-rarity-color, gold);text-shadow:0 1px 2px #000,0 0 4px #000;font-weight:700}',
     '@keyframes rpgLevelUp{0%{transform:scale(1);filter:brightness(1)}30%{transform:scale(1.4);filter:brightness(2) drop-shadow(0 0 12px gold)}100%{transform:scale(1);filter:brightness(1)}}',
     '.rpg-levelup-anim{animation:rpgLevelUp 900ms ease-out}',
     '.rpg-levelup-toast{position:fixed;left:50%;top:30%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.85);color:gold;font-size:22px;font-weight:800;padding:12px 20px;border-radius:10px;border:2px solid gold;z-index:2147483200;pointer-events:none;animation:rpgLevelUp 1200ms ease-out}',
+    '.rpg-catch-toast{position:fixed;left:50%;top:30%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.88);color:var(--rpg-rarity-color, gold);font-size:20px;font-weight:800;padding:12px 22px;border-radius:10px;border:2px solid var(--rpg-rarity-color, gold);box-shadow:0 0 24px var(--rpg-rarity-color, gold);z-index:2147483200;pointer-events:none;animation:rpgLevelUp 1600ms ease-out;text-align:center;line-height:1.4}',
     '.rpg-modal{position:fixed;inset:0;z-index:2147483400;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center}',
     '.rpg-modal-inner{background:#1a1a24;color:#eee;padding:22px 26px;border-radius:12px;border:2px solid gold;text-align:center;max-width:340px;position:relative}',
     '.rpg-modal-close{position:absolute;top:10px;right:10px;width:26px;height:26px;border-radius:50%;background:rgba(120,120,140,0.18);color:#bbb;font-size:16px;font-weight:900;display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;line-height:1;z-index:5;padding:0;margin:0;transition:background 150ms,color 150ms,transform 150ms}.rpg-modal-close:hover{background:#dc2626;color:#fff;transform:scale(1.1)}',
@@ -816,9 +817,9 @@
     '@keyframes rpgWildPulse{0%{transform:scale(1)}100%{transform:scale(1.06)}}',
     // ── Wild-pet catch UI ──────────────────────────────────────────
     '.rpg-wild.rpg-catchable{cursor:pointer}',
-    '.rpg-wild.rpg-catchable::before{content:"";position:absolute;left:50%;top:55%;width:calc(130px * var(--rpg-catch-scale, 1));height:calc(130px * var(--rpg-catch-scale, 1));margin:calc(-65px * var(--rpg-catch-scale, 1)) 0 0 calc(-65px * var(--rpg-catch-scale, 1));border:3px dashed gold;border-radius:50%;pointer-events:none;box-sizing:border-box;animation:rpgRingSpin 4s linear infinite;opacity:0.85}',
+    '.rpg-wild.rpg-catchable::before{content:"";position:absolute;left:50%;top:55%;width:calc(130px * var(--rpg-catch-scale, 1));height:calc(130px * var(--rpg-catch-scale, 1));margin:calc(-65px * var(--rpg-catch-scale, 1)) 0 0 calc(-65px * var(--rpg-catch-scale, 1));border:3px dashed var(--rpg-rarity-color, gold);border-radius:50%;pointer-events:none;box-sizing:border-box;animation:rpgRingSpin 4s linear infinite;opacity:0.85}',
     '@keyframes rpgRingSpin{to{transform:rotate(360deg)}}',
-    '.rpg-wild .catch-hint{text-align:center;color:gold;font-weight:800;font-size:14px;text-shadow:0 1px 2px #000,0 0 6px #000;margin-top:6px;letter-spacing:2px;animation:rpgCatchBounce 900ms ease-in-out infinite alternate}',
+    '.rpg-wild .catch-hint{text-align:center;color:var(--rpg-rarity-color, gold);font-weight:800;font-size:14px;text-shadow:0 1px 2px #000,0 0 6px #000;margin-top:6px;letter-spacing:2px;animation:rpgCatchBounce 900ms ease-in-out infinite alternate}',
     '@keyframes rpgCatchBounce{from{transform:translateY(0);opacity:0.85}to{transform:translateY(-4px);opacity:1}}',
     '.rpg-wild-shake{animation:rpgWildShake 380ms ease-in-out!important}',
     '.rpg-fail-catch{position:absolute;top:-18px;left:50%;color:#ef4444;font-weight:800;font-size:13px;text-shadow:0 1px 2px #000,0 0 6px #000;letter-spacing:0.5px;white-space:nowrap;pointer-events:none;animation:rpgFailCatch 1400ms ease-out forwards}',
@@ -882,6 +883,22 @@
     '@keyframes rpgRainbowSparkle{0%{transform:rotate(0deg) scale(1);opacity:0.4}100%{transform:rotate(180deg) scale(1.15);opacity:1}}',
     // ── Unified wild pulse (any special variant) ─────────────────
     '.rpg-wild-special img{animation:rpgWildPulse 900ms ease-in-out infinite alternate}',
+    // ── Variant-themed wild overrides (shiny/hollow/rainbow) ────
+    '.rpg-wild.rpg-shiny .label{animation:rpgWildShinyText 3s linear infinite;text-shadow:0 1px 2px #000,0 0 6px #facc15;font-weight:800}',
+    '.rpg-wild.rpg-shiny.rpg-catchable::before{animation:rpgRingSpin 4s linear infinite,rpgWildShinyRing 3s linear infinite;box-shadow:0 0 14px #facc15,inset 0 0 8px rgba(250,204,21,0.35)}',
+    '.rpg-wild.rpg-shiny .catch-hint{animation:rpgCatchBounce 900ms ease-in-out infinite alternate,rpgWildShinyText 3s linear infinite;text-shadow:0 1px 2px #000,0 0 10px #facc15}',
+    '.rpg-wild.rpg-hollow .label{animation:rpgWildHollowText 3s linear infinite;text-shadow:0 1px 2px #000,0 0 6px #94a3b8;font-weight:800}',
+    '.rpg-wild.rpg-hollow.rpg-catchable::before{animation:rpgRingSpin 4s linear infinite,rpgWildHollowRing 3s linear infinite;box-shadow:0 0 12px #94a3b8,inset 0 0 8px rgba(148,163,184,0.35)}',
+    '.rpg-wild.rpg-hollow .catch-hint{animation:rpgCatchBounce 900ms ease-in-out infinite alternate,rpgWildHollowText 3s linear infinite;text-shadow:0 1px 2px #000,0 0 10px #94a3b8}',
+    '.rpg-wild.rpg-rainbow .label{animation:rpgWildRainbowText 3s linear infinite;text-shadow:0 1px 2px #000,0 0 6px rgba(255,255,255,0.5);font-weight:800}',
+    '.rpg-wild.rpg-rainbow.rpg-catchable::before{animation:rpgRingSpin 4s linear infinite,rpgWildRainbowRing 3s linear infinite;box-shadow:0 0 14px #ff69b4}',
+    '.rpg-wild.rpg-rainbow .catch-hint{animation:rpgCatchBounce 900ms ease-in-out infinite alternate,rpgWildRainbowText 3s linear infinite;text-shadow:0 1px 2px #000,0 0 8px rgba(255,255,255,0.5)}',
+    '@keyframes rpgWildShinyRing{0%,100%{border-color:#fde68a}25%{border-color:#facc15}50%{border-color:#fbbf24}75%{border-color:#f59e0b}}',
+    '@keyframes rpgWildShinyText{0%,100%{color:#fde68a}25%{color:#facc15}50%{color:#fbbf24}75%{color:#f59e0b}}',
+    '@keyframes rpgWildHollowRing{0%,100%{border-color:#f8fafc}25%{border-color:#e0e7ff}50%{border-color:#cbd5e1}75%{border-color:#94a3b8}}',
+    '@keyframes rpgWildHollowText{0%,100%{color:#f8fafc}25%{color:#e0e7ff}50%{color:#cbd5e1}75%{color:#94a3b8}}',
+    '@keyframes rpgWildRainbowRing{0%,100%{border-color:#ff5555}20%{border-color:#ffaa00}40%{border-color:#00e6ff}60%{border-color:#55ff77}80%{border-color:#a855f7}}',
+    '@keyframes rpgWildRainbowText{0%,100%{color:#ff5555}20%{color:#ffaa00}40%{color:#00e6ff}60%{color:#55ff77}80%{color:#a855f7}}',
     // ── Dex layout with variant badges ───────────────────────────
     '.rpg-dex-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;padding:8px 6px;max-height:62vh;overflow-y:auto;overflow-x:hidden;box-sizing:border-box}',
     '.rpg-dex-card{background:#1e1e2e;border-radius:8px;padding:12px 8px 10px;text-align:center;border:1.5px solid #2a2a36;position:relative;transition:border-color 150ms;box-sizing:border-box}',
@@ -1860,6 +1877,7 @@
     wildEl.appendChild($('div', { class: 'catch-hint', html: 'CATCH!' }));
     wildEl.style.setProperty('--rpg-scale', String(rarityScale(wildPet.rarity)));
     wildEl.style.setProperty('--rpg-catch-scale', String(rarityCatchScale(wildPet.rarity)));
+    wildEl.style.setProperty('--rpg-rarity-color', (RARITY_META[wildPet.rarity] && RARITY_META[wildPet.rarity].color) || 'gold');
     const wInit = pickQuadrantPoint(160, 200, -9999, -9999, 0);
     wildEl.style.left = Math.floor(wInit.x) + 'px';
     wildEl.style.top  = Math.floor(wInit.y) + 'px';
@@ -1919,7 +1937,13 @@
       // Fire audio + particles + banner. Delay modal to let the celebration breathe.
       const extraDelay = playCatchCelebration(caughtVariant, cx, cy);
       if (extraDelay > 0) await new Promise(r => setTimeout(r, extraDelay));
-      await showModal(specialLine + 'Caught <b>' + caughtName + '</b>!' + firstLine);
+      const rarityColor = (RARITY_META[caughtRarity] && RARITY_META[caughtRarity].color) || 'gold';
+      let toastColor = rarityColor;
+      if (caughtVariant !== 'normal') {
+        const vc = VARIANT_META[caughtVariant] && VARIANT_META[caughtVariant].color;
+        toastColor = (vc && vc !== 'rainbow') ? vc : '#ff69b4';
+      }
+      flashCatchToast(specialLine + 'Caught <b>' + caughtName + '</b>!' + firstLine, toastColor);
     } else {
       wildAttempts++;
       if (wildEl) {
@@ -1945,6 +1969,13 @@
       }
     }
   }
+
+  const flashCatchToast = (html, rarityColor) => {
+    const toast = $('div', { class: 'rpg-catch-toast', html: html });
+    if (rarityColor) toast.style.setProperty('--rpg-rarity-color', rarityColor);
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 1900);
+  };
 
   const rollWildSpawn = () => { if (!wildEl && Math.random() < WILD_SPAWN_CHANCE) spawnWild(); };
 
