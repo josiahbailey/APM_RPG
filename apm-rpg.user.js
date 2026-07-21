@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      1.1.5
+// @version      1.2.0
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @icon         https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/icon.png
@@ -411,16 +411,16 @@
   const petById = (id) => PETS.find(p => p.id === id);
 
   // Rarity-driven size multipliers. Both scale with rarity tier (1..5):
-  //   Sprite scale grows +0.10 per tier over Common (1.0, 1.1, 1.2, 1.3, 1.4)
-  //   Catch-ring scale grows +0.05 per tier over Common (1.0, 1.05, 1.10, 1.15, 1.20)
+  //   Sprite scale grows +0.20 per tier over Common (1.0, 1.2, 1.4, 1.6, 1.8)
+  //   Catch-ring scale grows +0.10 per tier over Common (1.0, 1.1, 1.2, 1.3, 1.4)
   // Consumed via CSS custom properties --rpg-scale / --rpg-catch-scale.
   const rarityScale = (rarity) => {
     const m = RARITY_META[rarity];
-    return 1 + 0.1 * (((m && m.tier) || 1) - 1);
+    return 1 + 0.2 * (((m && m.tier) || 1) - 1);
   };
   const rarityCatchScale = (rarity) => {
     const m = RARITY_META[rarity];
-    return 1 + 0.05 * (((m && m.tier) || 1) - 1);
+    return 1 + 0.1 * (((m && m.tier) || 1) - 1);
   };
   const instanceById = (iid) => state.collection.find(i => i.instanceId === iid);
   const rand = (a, b) => a + Math.random() * (b - a);
@@ -798,7 +798,15 @@
     '@keyframes rpgRoamPoke{0%{transform:rotate(0) scale(1)}18%{transform:rotate(-12deg) scale(1.08)}36%{transform:rotate(10deg) scale(1.05)}54%{transform:rotate(-6deg) scale(1.03)}72%{transform:rotate(4deg) scale(1.01)}100%{transform:rotate(0) scale(1)}}',
     '.rpg-roam img{width:calc(64px * var(--rpg-scale, 1));height:calc(64px * var(--rpg-scale, 1));object-fit:contain;filter:drop-shadow(0 4px 6px rgba(0,0,0,0.4))}',
     '.rpg-roam .label{font-size:11px;text-align:center;color:#fff;text-shadow:0 1px 2px #000,0 0 4px #000}',
-    '.rpg-wild{position:fixed;z-index:2147483100;cursor:pointer;transition:left 3s linear,top 3s linear,transform 300ms}',
+    '.rpg-wild{position:fixed;z-index:2147483100;cursor:pointer;transition:left 3s linear,top 3s linear,transform 300ms;text-align:center}',
+    '.rpg-pet-sprite{position:relative;display:inline-block;line-height:0}',
+    // ── Reflective-film overlay (hollow + rainbow variants) ──
+    // ::after is a gradient masked to the pet's alpha channel (via --rpg-pet-mask, set inline per-instance),
+    // so the gradient only shows where the pet has opaque pixels. No effect on surroundings.
+    '.rpg-hollow .rpg-pet-sprite::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(115deg,transparent 20%,rgba(255,255,255,0.6) 45%,rgba(219,234,254,0.85) 55%,rgba(255,255,255,0.6) 65%,transparent 80%);background-size:300% 100%;animation:rpgHollowFilm 4.8s linear infinite;-webkit-mask-image:var(--rpg-pet-mask);mask-image:var(--rpg-pet-mask);-webkit-mask-size:contain;mask-size:contain;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-mode:alpha;mask-mode:alpha;mix-blend-mode:overlay}',
+    '@keyframes rpgHollowFilm{0%{background-position:-100% 0%}100%{background-position:200% 0%}}',
+    '.rpg-rainbow .rpg-pet-sprite::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(135deg,#ff5555,#ffaa00,#ffff55,#55ff77,#55ccff,#aa66ff,#ff66cc,#ff5555);background-size:300% 300%;animation:rpgRainbowFilm 7s linear infinite;-webkit-mask-image:var(--rpg-pet-mask);mask-image:var(--rpg-pet-mask);-webkit-mask-size:contain;mask-size:contain;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-mode:alpha;mask-mode:alpha;opacity:0.55;mix-blend-mode:color}',
+    '@keyframes rpgRainbowFilm{0%{background-position:0% 0%}100%{background-position:300% 300%}}',
     '.rpg-wild img{width:calc(96px * var(--rpg-scale, 1));height:calc(96px * var(--rpg-scale, 1));object-fit:contain;filter:drop-shadow(0 0 12px var(--rpg-rarity-color, gold))}',
     '.rpg-wild .label{text-align:center;font-size:12px;color:var(--rpg-rarity-color, gold);text-shadow:0 1px 2px #000,0 0 4px #000;font-weight:700}',
     '@keyframes rpgLevelUp{0%{transform:scale(1);filter:brightness(1)}30%{transform:scale(1.4);filter:brightness(2) drop-shadow(0 0 12px gold)}100%{transform:scale(1);filter:brightness(1)}}',
@@ -809,17 +817,16 @@
     '.rpg-modal-inner{background:#1a1a24;color:#eee;padding:22px 26px;border-radius:12px;border:2px solid gold;text-align:center;max-width:340px;position:relative}',
     '.rpg-modal-close{position:absolute;top:10px;right:10px;width:26px;height:26px;border-radius:50%;background:rgba(120,120,140,0.18);color:#bbb;font-size:16px;font-weight:900;display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;line-height:1;z-index:5;padding:0;margin:0;transition:background 150ms,color 150ms,transform 150ms}.rpg-modal-close:hover{background:#dc2626;color:#fff;transform:scale(1.1)}',
     '.rpg-modal-inner button{margin-top:14px;padding:8px 16px;background:gold;color:#111;border:none;border-radius:6px;font-weight:700;cursor:pointer}',
-    '.rpg-shiny{position:relative}.rpg-shiny img{filter:drop-shadow(0 0 6px gold) drop-shadow(0 0 12px #fff59d)}',
+    '.rpg-shiny img{filter:drop-shadow(0 0 6px gold) drop-shadow(0 0 12px #fff59d)}',
     '.rpg-shiny-fallback img{filter:hue-rotate(160deg) saturate(1.6) contrast(1.05) drop-shadow(0 0 6px gold) drop-shadow(0 0 12px #fff59d)!important}',
-    '.rpg-shiny::after{content:"";position:absolute;inset:-4px;pointer-events:none;opacity:0.85;background:radial-gradient(circle at 20% 25%,#fff 0 2px,transparent 3px),radial-gradient(circle at 78% 60%,#fff 0 1.5px,transparent 2.5px),radial-gradient(circle at 55% 15%,gold 0 2px,transparent 3px);animation:rpgSparkle 1.4s ease-in-out infinite alternate}',
     '@keyframes rpgSparkle{0%{transform:rotate(0);opacity:0.3}100%{transform:rotate(360deg);opacity:0.9}}',
-    '.rpg-shiny-wild img{filter:drop-shadow(0 0 18px gold) drop-shadow(0 0 30px #fff59d)!important;animation:rpgWildPulse 900ms ease-in-out infinite alternate}',
+    '.rpg-shiny-wild img{filter:drop-shadow(0 0 10px gold) drop-shadow(0 0 18px #fff59d)!important;animation:rpgWildPulse 900ms ease-in-out infinite alternate}',
     '@keyframes rpgWildPulse{0%{transform:scale(1)}100%{transform:scale(1.06)}}',
     // ── Wild-pet catch UI ──────────────────────────────────────────
     '.rpg-wild.rpg-catchable{cursor:pointer}',
-    '.rpg-wild.rpg-catchable::before{content:"";position:absolute;left:50%;top:55%;width:calc(130px * var(--rpg-catch-scale, 1));height:calc(130px * var(--rpg-catch-scale, 1));margin:calc(-65px * var(--rpg-catch-scale, 1)) 0 0 calc(-65px * var(--rpg-catch-scale, 1));border:3px dashed var(--rpg-rarity-color, gold);border-radius:50%;pointer-events:none;box-sizing:border-box;animation:rpgRingSpin 4s linear infinite;opacity:0.85}',
+    '.rpg-wild.rpg-catchable .rpg-pet-sprite::before{content:"";position:absolute;left:50%;top:50%;width:calc(130px * var(--rpg-catch-scale, 1));height:calc(130px * var(--rpg-catch-scale, 1));margin:calc(-65px * var(--rpg-catch-scale, 1)) 0 0 calc(-65px * var(--rpg-catch-scale, 1));border:3px dashed var(--rpg-rarity-color, gold);border-radius:50%;pointer-events:none;box-sizing:border-box;animation:rpgRingSpin 4s linear infinite;opacity:0.85}',
     '@keyframes rpgRingSpin{to{transform:rotate(360deg)}}',
-    '.rpg-wild .catch-hint{text-align:center;color:var(--rpg-rarity-color, gold);font-weight:800;font-size:14px;text-shadow:0 1px 2px #000,0 0 6px #000;margin-top:6px;letter-spacing:2px;animation:rpgCatchBounce 900ms ease-in-out infinite alternate}',
+    '.rpg-wild .catch-hint{text-align:center;color:var(--rpg-rarity-color, gold);font-weight:800;font-size:14px;text-shadow:0 1px 2px #000,0 0 6px #000;margin-bottom:6px;letter-spacing:2px;animation:rpgCatchBounce 900ms ease-in-out infinite alternate}',
     '@keyframes rpgCatchBounce{from{transform:translateY(0);opacity:0.85}to{transform:translateY(-4px);opacity:1}}',
     '.rpg-wild-shake{animation:rpgWildShake 380ms ease-in-out!important}',
     '.rpg-fail-catch{position:absolute;top:-18px;left:50%;color:#ef4444;font-weight:800;font-size:13px;text-shadow:0 1px 2px #000,0 0 6px #000;letter-spacing:0.5px;white-space:nowrap;pointer-events:none;animation:rpgFailCatch 1400ms ease-out forwards}',
@@ -869,30 +876,29 @@
     // ── Hollow variant (silvery reflective chrome) ──────────────
     '.rpg-hollow img{filter:brightness(1.22) contrast(1.15) saturate(0.65) drop-shadow(0 0 6px #dbeafe) drop-shadow(0 0 14px #94a3b8)}',
     '.rpg-hollow-fallback img{filter:grayscale(0.65) brightness(1.3) contrast(1.2) saturate(0.5) hue-rotate(180deg) drop-shadow(0 0 6px #e0e7ff) drop-shadow(0 0 14px #94a3b8)!important}',
-    '.rpg-hollow{position:relative;overflow:hidden;border-radius:inherit}',
-    '.rpg-hollow::before{content:"";position:absolute;left:-60%;top:0;width:85%;height:100%;background:linear-gradient(115deg,transparent 20%,rgba(255,255,255,0.35) 38%,rgba(219,234,254,0.7) 50%,rgba(255,255,255,0.35) 62%,transparent 80%);animation:rpgHollowSheen 2.2s linear infinite;pointer-events:none;mix-blend-mode:overlay}',
-    '.rpg-hollow::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(160deg,rgba(226,232,240,0.15) 0%,transparent 40%,transparent 60%,rgba(148,163,184,0.15) 100%);border-radius:inherit}',
     '@keyframes rpgHollowSheen{0%{transform:translateX(0)}100%{transform:translateX(220%)}}',
     // ── Rainbow variant (hue rotate + colored sparkles) ──────────
     '.rpg-rainbow img{animation:rpgRainbowHue 3.5s linear infinite;filter:saturate(1.4) drop-shadow(0 0 6px #ff00e6) drop-shadow(0 0 14px #00e6ff)}',
     '.rpg-rainbow-fallback img{animation:rpgRainbowHue 3.5s linear infinite;filter:saturate(1.8) contrast(1.05) drop-shadow(0 0 6px #ff00e6) drop-shadow(0 0 14px #00e6ff)!important}',
     '@keyframes rpgRainbowHue{0%{filter:saturate(1.5) hue-rotate(0deg) drop-shadow(0 0 6px #ff00e6) drop-shadow(0 0 14px #00e6ff)}100%{filter:saturate(1.5) hue-rotate(360deg) drop-shadow(0 0 6px #ff00e6) drop-shadow(0 0 14px #00e6ff)}}',
-    '.rpg-rainbow{position:relative}',
-    '.rpg-rainbow::after{content:"";position:absolute;inset:-4px;pointer-events:none;opacity:0.9;background:radial-gradient(circle at 20% 25%,#ff69b4 0 2px,transparent 3px),radial-gradient(circle at 78% 60%,#00ff88 0 2px,transparent 3px),radial-gradient(circle at 55% 15%,#00aaff 0 2px,transparent 3px),radial-gradient(circle at 40% 85%,#ffea00 0 2px,transparent 3px),radial-gradient(circle at 65% 45%,#ff4488 0 1.5px,transparent 2.5px);animation:rpgRainbowSparkle 1.6s ease-in-out infinite alternate}',
     '.rpg-rarity-rainbow{background:linear-gradient(90deg,#ff5555,#ffaa00,#ffff55,#55ff77,#55ccff,#aa66ff,#ff66cc);background-clip:text;-webkit-background-clip:text;color:transparent;font-weight:700}',
     '@keyframes rpgRainbowSparkle{0%{transform:rotate(0deg) scale(1);opacity:0.4}100%{transform:rotate(180deg) scale(1.15);opacity:1}}',
     // ── Unified wild pulse (any special variant) ─────────────────
     '.rpg-wild-special img{animation:rpgWildPulse 900ms ease-in-out infinite alternate}',
     // ── Variant-themed wild overrides (shiny/hollow/rainbow) ────
     '.rpg-wild.rpg-shiny .label{animation:rpgWildShinyText 3s linear infinite;text-shadow:0 1px 2px #000,0 0 6px #facc15;font-weight:800}',
-    '.rpg-wild.rpg-shiny.rpg-catchable::before{animation:rpgRingSpin 4s linear infinite,rpgWildShinyRing 3s linear infinite;box-shadow:0 0 14px #facc15,inset 0 0 8px rgba(250,204,21,0.35)}',
+    '.rpg-wild.rpg-shiny.rpg-catchable .rpg-pet-sprite::before{animation:rpgRingSpin 4s linear infinite,rpgWildShinyRing 3s linear infinite;box-shadow:0 0 14px #facc15,inset 0 0 8px rgba(250,204,21,0.35);background:radial-gradient(circle,rgba(255,229,150,0.22) 0%,rgba(255,229,150,0.08) 55%,transparent 75%)}',
     '.rpg-wild.rpg-shiny .catch-hint{animation:rpgCatchBounce 900ms ease-in-out infinite alternate,rpgWildShinyText 3s linear infinite;text-shadow:0 1px 2px #000,0 0 10px #facc15}',
     '.rpg-wild.rpg-hollow .label{animation:rpgWildHollowText 3s linear infinite;text-shadow:0 1px 2px #000,0 0 6px #94a3b8;font-weight:800}',
-    '.rpg-wild.rpg-hollow.rpg-catchable::before{animation:rpgRingSpin 4s linear infinite,rpgWildHollowRing 3s linear infinite;box-shadow:0 0 12px #94a3b8,inset 0 0 8px rgba(148,163,184,0.35)}',
+    '.rpg-wild.rpg-hollow.rpg-catchable .rpg-pet-sprite::before{animation:rpgRingSpin 4s linear infinite,rpgWildHollowRing 3s linear infinite;box-shadow:0 0 12px #94a3b8,inset 0 0 8px rgba(148,163,184,0.35);background:radial-gradient(circle,rgba(226,232,240,0.25) 0%,rgba(148,163,184,0.1) 55%,transparent 75%)}',
     '.rpg-wild.rpg-hollow .catch-hint{animation:rpgCatchBounce 900ms ease-in-out infinite alternate,rpgWildHollowText 3s linear infinite;text-shadow:0 1px 2px #000,0 0 10px #94a3b8}',
     '.rpg-wild.rpg-rainbow .label{animation:rpgWildRainbowText 3s linear infinite;text-shadow:0 1px 2px #000,0 0 6px rgba(255,255,255,0.5);font-weight:800}',
-    '.rpg-wild.rpg-rainbow.rpg-catchable::before{animation:rpgRingSpin 4s linear infinite,rpgWildRainbowRing 3s linear infinite;box-shadow:0 0 14px #ff69b4}',
+    '.rpg-wild.rpg-rainbow.rpg-catchable .rpg-pet-sprite::before{animation:rpgRingSpin 4s linear infinite,rpgWildRainbowRing 3s linear infinite;box-shadow:0 0 14px #ff69b4;background:conic-gradient(from 0deg,rgba(255,85,85,0.35),rgba(255,170,0,0.35),rgba(255,234,0,0.35),rgba(85,255,119,0.35),rgba(0,230,255,0.35),rgba(168,85,247,0.35),rgba(255,105,180,0.35),rgba(255,85,85,0.35))}',
     '.rpg-wild.rpg-rainbow .catch-hint{animation:rpgCatchBounce 900ms ease-in-out infinite alternate,rpgWildRainbowText 3s linear infinite;text-shadow:0 1px 2px #000,0 0 8px rgba(255,255,255,0.5)}',
+    // Match the wild-label color-cycle animation on roamer labels for each variant.
+    '.rpg-roam.rpg-shiny .label{animation:rpgWildShinyText 3s linear infinite;text-shadow:0 1px 2px #000,0 0 6px #facc15;font-weight:800}',
+    '.rpg-roam.rpg-hollow .label{animation:rpgWildHollowText 3s linear infinite;text-shadow:0 1px 2px #000,0 0 6px #94a3b8;font-weight:800}',
+    '.rpg-roam.rpg-rainbow .label{animation:rpgWildRainbowText 3s linear infinite;text-shadow:0 1px 2px #000,0 0 6px rgba(255,255,255,0.5);font-weight:800}',
     '@keyframes rpgWildShinyRing{0%,100%{border-color:#fde68a}25%{border-color:#facc15}50%{border-color:#fbbf24}75%{border-color:#f59e0b}}',
     '@keyframes rpgWildShinyText{0%,100%{color:#fde68a}25%{color:#facc15}50%{color:#fbbf24}75%{color:#f59e0b}}',
     '@keyframes rpgWildHollowRing{0%,100%{border-color:#f8fafc}25%{border-color:#e0e7ff}50%{border-color:#cbd5e1}75%{border-color:#94a3b8}}',
@@ -1069,7 +1075,7 @@
         if (p) {
           const v = variantOf(inst);
           petSlot.appendChild($('img', { src: petImg(p, v) }));
-          petSlot.appendChild($('div', { class: 'rpg-slot-badge', html: (variantBadge(v) ? variantBadge(v) + ' ' : '') + variantRarityHTML(v, p.rarity) }));
+          petSlot.appendChild($('div', { class: 'rpg-slot-badge', html: variantRarityHTML(v, p.rarity) }));
           applyVariantClasses(petSlot, p, v);
         }
       } else {
@@ -1276,7 +1282,19 @@
       emptyItem.appendChild($('div', { class: 'l', html: '\u2014' }));
       grid.appendChild(emptyItem);
 
-      for (const inst of state.collection) {
+      const VARIANT_TIER = { normal: 0, shiny: 1, hollow: 2, rainbow: 3 };
+      const sortedInv = state.collection.slice().sort((a, b) => {
+        const pa = petById(a.petId), pb = petById(b.petId);
+        if (!pa || !pb) return 0;
+        // Variant tier first (rainbow > hollow > shiny > normal); then rarity desc; then name.
+        const dv = (VARIANT_TIER[variantOf(b)] || 0) - (VARIANT_TIER[variantOf(a)] || 0);
+        if (dv) return dv;
+        const dr = ((RARITY_META[pb.rarity] && RARITY_META[pb.rarity].tier) || 0)
+                 - ((RARITY_META[pa.rarity] && RARITY_META[pa.rarity].tier) || 0);
+        if (dr) return dr;
+        return pa.name.localeCompare(pb.name);
+      });
+      for (const inst of sortedInv) {
         const p = petById(inst.petId); if (!p) continue;
         // Show whether this pet is already assigned to a DIFFERENT slot
         const assignedTo = state.equip.petInstanceIds.indexOf(inst.instanceId);
@@ -1318,7 +1336,7 @@
         });
         item.appendChild(delBtn);
         item.appendChild($('img', { src: petImg(p, v) }));
-        item.appendChild($('div', { class: 'n', html: (variantBadge(v) ? variantBadge(v) + ' ' : '') + p.name }));
+        item.appendChild($('div', { class: 'n', html: p.name }));
         item.appendChild($('div', { class: 'l', html: variantRarityHTML(v, p.rarity) }));
         if (inOtherSlot) item.appendChild($('div', { class: 'rpg-in-slot-tag', html: 'Slot ' + (assignedTo + 1) }));
         grid.appendChild(item);
@@ -1344,8 +1362,9 @@
     inner.appendChild($('div', { class: 'rpg-dex-count', html: speciesSeen + ' / ' + PETS.length }));
     const grid = $('div', { class: 'rpg-dex-grid' });
     for (const p of PETS) {
-      const nCount = state.collection.filter(i => i.petId === p.id && variantOf(i) === 'normal').length;
-      const owned = nCount > 0;
+      // A species counts as unlocked once ANY variant of it has been caught.
+      const anyCount = state.collection.filter(i => i.petId === p.id).length;
+      const owned = anyCount > 0;
       const card = $('div', { class: 'rpg-dex-card' + (owned ? '' : ' rpg-dex-silhouette') });
       // Top row: three small diamond badges (shiny / hollow / rainbow)
       const badgeRow = $('div', { class: 'rpg-dex-card-badges' });
@@ -1363,7 +1382,7 @@
       card.appendChild($('img', { src: p.img }));
       // Bottom: name + rarity/count
       card.appendChild($('div', { class: 'n', html: owned ? p.name : '???' }));
-      card.appendChild($('div', { class: 'c', html: owned ? ('\u00D7' + nCount + ' \u00B7 ' + rarityHTML(p.rarity)) : '\u2014' }));
+      card.appendChild($('div', { class: 'c', html: owned ? ('\u00D7' + anyCount + ' \u00B7 ' + rarityHTML(p.rarity)) : '\u2014' }));
       grid.appendChild(card);
     }
     inner.appendChild(grid);
@@ -1597,25 +1616,25 @@
   // Also enforces a minimum move distance so pets don't appear stuck when
   // Math.random picks a spot near the current one.
   // ================================================================
-  const QUADRANT_INNER_R = 0;          // inner ring removed — panel no-go rect handles UI avoidance
-  const QUADRANT_OUTER_FRAC = 0.78;
-  const QUADRANT_OUTER_H_MULT = 1.2;   // stretch arc horizontally +20%
-  const QUADRANT_OUTER_V_MULT = 0.9;   // squash arc vertically -10%
-  const QUADRANT_CENTER_Y_OFFSET = 50; // shift arc center down 50px so top doesn't reach as high
+  // Full-circle roam boundary anchored in the bottom-right, fully contained in viewport.
+  const CIRCLE_RADIUS_FRAC = 0.3375; // outer radius as fraction of min(viewport W, H)
+  const CIRCLE_EDGE_MARGIN = 30;    // px inset from right / bottom viewport edges
+  const CIRCLE_INNER_R     = 60;    // small dead zone at the center so pets don't cluster
 
   const pickQuadrantPoint = (spriteW, spriteH, curX, curY, minMoveDist) => {
     const W = window.innerWidth, H = window.innerHeight;
-    const baseR = Math.max(QUADRANT_INNER_R + 120, Math.min(W, H) * QUADRANT_OUTER_FRAC);
+    const R = Math.min(W, H) * CIRCLE_RADIUS_FRAC;
+    const cx = W - R - CIRCLE_EDGE_MARGIN;
+    const cy = H - R - CIRCLE_EDGE_MARGIN;
     const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
     const generate = () => {
-      const angle = Math.random() * (Math.PI / 2);           // 0 = west, π/2 = north
-      const radius = QUADRANT_INNER_R + Math.random() * (baseR - QUADRANT_INNER_R);
-      // Elliptical quarter-arc: separate horizontal / vertical semi-axes.
-      const cx = W - Math.cos(angle) * radius * QUADRANT_OUTER_H_MULT;
-      const cy = (H + QUADRANT_CENTER_Y_OFFSET) - Math.sin(angle) * radius * QUADRANT_OUTER_V_MULT;
+      const angle  = Math.random() * Math.PI * 2;
+      const radius = CIRCLE_INNER_R + Math.random() * (R - CIRCLE_INNER_R);
+      const px = cx + Math.cos(angle) * radius;
+      const py = cy + Math.sin(angle) * radius;
       return {
-        x: clamp(cx - spriteW / 2, 0, Math.max(0, W - spriteW)),
-        y: clamp(cy - spriteH / 2, 0, Math.max(0, H - spriteH)),
+        x: clamp(px - spriteW / 2, 0, Math.max(0, W - spriteW)),
+        y: clamp(py - spriteH / 2, 0, Math.max(0, H - spriteH)),
       };
     };
     for (let i = 0; i < 16; i++) {
@@ -1633,25 +1652,28 @@
     if (boundaryVizEl) { boundaryVizEl.remove(); boundaryVizEl = null; }
     if (!boundaryVizOn) return;
     const W = window.innerWidth, H = window.innerHeight;
-    const baseR = Math.max(QUADRANT_INNER_R + 120, Math.min(W, H) * QUADRANT_OUTER_FRAC);
-    const arcW  = baseR * QUADRANT_OUTER_H_MULT;
-    const arcH  = baseR * QUADRANT_OUTER_V_MULT;
-    const cx = W, cy = H + QUADRANT_CENTER_Y_OFFSET;
+    const R = Math.min(W, H) * CIRCLE_RADIUS_FRAC;
+    const cx = W - R - CIRCLE_EDGE_MARGIN;
+    const cy = H - R - CIRCLE_EDGE_MARGIN;
     const container = document.createElement('div');
     container.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483200';
-    // Arc outline via SVG
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('width', W); svg.setAttribute('height', H);
     svg.style.cssText = 'position:absolute;inset:0';
-    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    // Elliptical quarter-arc from (cx - arcW, cy) to (cx, cy - arcH).
-    path.setAttribute('d', 'M ' + (cx - arcW) + ' ' + cy + ' A ' + arcW + ' ' + arcH + ' 0 0 1 ' + cx + ' ' + (cy - arcH));
-    path.setAttribute('fill', 'none');
-    path.setAttribute('stroke', '#22c55e');
-    path.setAttribute('stroke-width', '2');
-    path.setAttribute('stroke-dasharray', '6 4');
-    path.setAttribute('opacity', '0.75');
-    svg.appendChild(path);
+    const outer = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    outer.setAttribute('cx', cx); outer.setAttribute('cy', cy); outer.setAttribute('r', R);
+    outer.setAttribute('fill', 'none'); outer.setAttribute('stroke', '#22c55e');
+    outer.setAttribute('stroke-width', '2'); outer.setAttribute('stroke-dasharray', '6 4');
+    outer.setAttribute('opacity', '0.75');
+    svg.appendChild(outer);
+    if (CIRCLE_INNER_R > 0) {
+      const inner = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      inner.setAttribute('cx', cx); inner.setAttribute('cy', cy); inner.setAttribute('r', CIRCLE_INNER_R);
+      inner.setAttribute('fill', 'none'); inner.setAttribute('stroke', '#22c55e');
+      inner.setAttribute('stroke-width', '1'); inner.setAttribute('stroke-dasharray', '3 3');
+      inner.setAttribute('opacity', '0.5');
+      svg.appendChild(inner);
+    }
     container.appendChild(svg);
     document.body.appendChild(container);
     boundaryVizEl = container;
@@ -1680,34 +1702,86 @@
     setTimeout(() => { try { el.classList.remove('rpg-poking'); } catch (e) {} }, POKE_ANIM_MS + 40);
   };
   const TOSS_BOUNCE_DAMPING = 0.55; // energy retained after each wall hit
+  const PET_COLLIDE_DAMPING = 0.90; // energy retained after pet-pet collision (looser than walls)
   const startToss = (i, vx, vy) => {
     const el = roamers[i]; if (!el) return;
     const ctx = rmCtx(i);
+    // Snap to live position BEFORE disabling the transition, otherwise an idle roamer
+    // mid-CSS-transition (state.left/top = future target) would teleport to that target.
+    if (ctx.state !== 'grabbed') {
+      const liveRect = el.getBoundingClientRect();
+      el.style.left = Math.floor(liveRect.left) + 'px';
+      el.style.top  = Math.floor(liveRect.top)  + 'px';
+    }
     ctx.state = 'tossing';
     el.classList.remove('rpg-grabbed');
     el.classList.add('rpg-tossing');
-    let x = parseFloat(el.style.left) || 0;
-    let y = parseFloat(el.style.top) || 0;
-    // Cache sprite dimensions once — they don't change mid-toss (scale is per-rarity).
+    ctx.vx = vx; ctx.vy = vy;
+    // Cache sprite dimensions once — scale is per-rarity, doesn't change mid-toss.
     const rect = el.getBoundingClientRect();
-    const w = rect.width, h = rect.height;
-    let lastT = performance.now();
+    ctx.w = rect.width; ctx.h = rect.height;
+    ctx.lastT = performance.now();
     const step = (now) => {
-      if (!roamers[i] || rmCtx(i).state !== 'tossing') return;
-      const dt = now - lastT; lastT = now;
+      const cctx = rmCtx(i);
+      if (!roamers[i] || cctx.state !== 'tossing') return;
+      const dt = now - cctx.lastT; cctx.lastT = now;
       const vw = window.innerWidth, vh = window.innerHeight;
-      x += vx * dt;
-      y += vy * dt;
+      let x = parseFloat(roamers[i].style.left) || 0;
+      let y = parseFloat(roamers[i].style.top)  || 0;
+      const w = cctx.w, h = cctx.h;
+      x += cctx.vx * dt;
+      y += cctx.vy * dt;
       // Bounce off viewport edges with damping.
-      if (x < 0)          { x = 0;           vx = -vx * TOSS_BOUNCE_DAMPING; }
-      else if (x + w > vw){ x = vw - w;      vx = -vx * TOSS_BOUNCE_DAMPING; }
-      if (y < 0)          { y = 0;           vy = -vy * TOSS_BOUNCE_DAMPING; }
-      else if (y + h > vh){ y = vh - h;      vy = -vy * TOSS_BOUNCE_DAMPING; }
-      vx *= TOSS_DECAY;
-      vy *= TOSS_DECAY;
-      el.style.left = Math.floor(x) + 'px';
-      el.style.top  = Math.floor(y) + 'px';
-      const speed = Math.hypot(vx, vy);
+      if (x < 0)          { x = 0;      cctx.vx = -cctx.vx * TOSS_BOUNCE_DAMPING; }
+      else if (x + w > vw){ x = vw - w; cctx.vx = -cctx.vx * TOSS_BOUNCE_DAMPING; }
+      if (y < 0)          { y = 0;      cctx.vy = -cctx.vy * TOSS_BOUNCE_DAMPING; }
+      else if (y + h > vh){ y = vh - h; cctx.vy = -cctx.vy * TOSS_BOUNCE_DAMPING; }
+      // Pet-pet collision — circle-vs-circle, elastic exchange along collision normal.
+      for (let j = 0; j < roamers.length; j++) {
+        if (j === i || !roamers[j]) continue;
+        const otherEl = roamers[j];
+        const octx = rmCtx(j);
+        // Grabbed pets act as walls — the tossing pet still reflects,
+        // but we skip velocity assignment on the grabbed pet at the bottom of this block.
+        // Use live rect for the other pet (may be mid-CSS-transition when idle).
+        const orect = otherEl.getBoundingClientRect();
+        const oCX = orect.left + orect.width / 2;
+        const oCY = orect.top  + orect.height / 2;
+        const mCX = x + w / 2, mCY = y + h / 2;
+        const dx = oCX - mCX, dy = oCY - mCY;
+        const distSq = dx * dx + dy * dy;
+        const myR = Math.min(w, h) * 0.42;
+        const otR = Math.min(orect.width, orect.height) * 0.42;
+        const minDist = myR + otR;
+        if (distSq >= minDist * minDist || distSq === 0) continue;
+        const dist = Math.sqrt(distSq);
+        const nx = dx / dist, ny = dy / dist;
+        // Push me clear of the overlap (other pet stays put; it'll move when woken).
+        const overlap = minDist - dist;
+        x -= nx * overlap;
+        y -= ny * overlap;
+        // Elastic exchange along the collision normal (equal masses).
+        const otVx = octx.vx || 0, otVy = octx.vy || 0;
+        const dvx = cctx.vx - otVx, dvy = cctx.vy - otVy;
+        const vRel = dvx * nx + dvy * ny;
+        if (vRel <= 0) continue; // moving apart already — don't re-reflect
+        const impulse = vRel * PET_COLLIDE_DAMPING;
+        cctx.vx -= impulse * nx;
+        cctx.vy -= impulse * ny;
+        const newOtVx = otVx + impulse * nx;
+        const newOtVy = otVy + impulse * ny;
+        if (octx.state === 'idle') {
+          startToss(j, newOtVx, newOtVy);
+        } else if (octx.state === 'tossing') {
+          octx.vx = newOtVx;
+          octx.vy = newOtVy;
+        } // grabbed → leave alone; mouse controls it
+      }
+      cctx.vx *= TOSS_DECAY;
+      cctx.vy *= TOSS_DECAY;
+      roamers[i].style.left = Math.floor(x) + 'px';
+      roamers[i].style.top  = Math.floor(y) + 'px';
+      const speed = Math.hypot(cctx.vx, cctx.vy);
       if (speed > 0.04) requestAnimationFrame(step);
       else endGrab(i);
     };
@@ -1817,8 +1891,12 @@
     const v = variantOf(inst);
     const cls = 'rpg-roam' + variantClassStr(p, v);
     const el = $('div', { class: cls });
-    el.appendChild($('div', { class: 'label', html: (variantBadge(v) ? variantBadge(v) + ' ' : '') + p.name }));
-    el.appendChild($('img', { src: petImg(p, v) }));
+    el.appendChild($('div', { class: 'label', html: p.name }));
+    const roamImgUrl = petImg(p, v);
+    const roamPetBox = $('div', { class: 'rpg-pet-sprite' });
+    roamPetBox.style.setProperty('--rpg-pet-mask', 'url("' + roamImgUrl + '")');
+    roamPetBox.appendChild($('img', { src: roamImgUrl }));
+    el.appendChild(roamPetBox);
     el.style.setProperty('--rpg-scale', String(rarityScale(p.rarity)));
     const initPos = pickQuadrantPoint(80, 80, -9999, -9999, 0);
     el.style.left = Math.floor(initPos.x) + 'px';
@@ -1840,6 +1918,51 @@
       moveRoamerAt(i);
     }
   }, 10000);
+
+  // ── Roam-vs-roam collision poll ──────────────────────────────
+  // Idle roamers move via CSS transition, so we can't detect collisions per-frame.
+  // Instead poll every 200ms: if two idle roamers overlap, push each toward a new
+  // target away from the other. CSS transition smooths the redirect.
+  const ROAM_PUSH_DIST_PX = 180; // how far to shove each pet away from the collision
+  const redirectSpriteAwayFrom = (el, fromCX, fromCY, w, h, nx, ny) => {
+    if (!el) return;
+    const W = window.innerWidth, H = window.innerHeight;
+    const tCX = fromCX + nx * ROAM_PUSH_DIST_PX;
+    const tCY = fromCY + ny * ROAM_PUSH_DIST_PX;
+    const x = Math.max(0, Math.min(W - w, tCX - w / 2));
+    const y = Math.max(0, Math.min(H - h, tCY - h / 2));
+    el.style.left = Math.floor(x) + 'px';
+    el.style.top  = Math.floor(y) + 'px';
+  };
+  setInterval(() => {
+    // Only idle roamers participate: grabbed pets stay locked to the cursor and
+    // tossed pets already have their own per-frame collision logic.
+    const idleEls = [];
+    for (let i = 0; i < roamers.length; i++) {
+      if (roamers[i] && rmCtx(i).state === 'idle') idleEls.push(roamers[i]);
+    }
+    for (let a = 0; a < idleEls.length; a++) {
+      const ra = idleEls[a].getBoundingClientRect();
+      const aCX = ra.left + ra.width / 2;
+      const aCY = ra.top  + ra.height / 2;
+      const aR  = Math.min(ra.width, ra.height) * 0.42;
+      for (let b = a + 1; b < idleEls.length; b++) {
+        const rb = idleEls[b].getBoundingClientRect();
+        const bCX = rb.left + rb.width / 2;
+        const bCY = rb.top  + rb.height / 2;
+        const bR  = Math.min(rb.width, rb.height) * 0.42;
+        const dx = bCX - aCX, dy = bCY - aCY;
+        const distSq = dx * dx + dy * dy;
+        const minDist = aR + bR;
+        if (distSq >= minDist * minDist || distSq === 0) continue;
+        const dist = Math.sqrt(distSq);
+        const nx = dx / dist, ny = dy / dist;
+        redirectSpriteAwayFrom(idleEls[a], aCX, aCY, ra.width, ra.height, -nx, -ny);
+        redirectSpriteAwayFrom(idleEls[b], bCX, bCY, rb.width, rb.height,  nx,  ny);
+      }
+    }
+  }, 200);
+
 
 
   // ================================================================
@@ -1872,9 +1995,13 @@
     const cls = 'rpg-wild rpg-catchable' + variantClassStr(wildPet, wildVariant) + (special ? ' rpg-wild-special' : '');
     wildEl = $('div', { class: cls, title: 'Click to attempt catch!', onclick: attemptCatch });
     const vLabel = special ? (variantBadge(wildVariant) + ' WILD ' + variantLabel(wildVariant).toUpperCase() + ' ' + wildPet.name + '!') : ('WILD ' + wildPet.name + '!');
-    wildEl.appendChild($('div', { class: 'label', html: vLabel }));
-    wildEl.appendChild($('img', { src: petImg(wildPet, wildVariant) }));
     wildEl.appendChild($('div', { class: 'catch-hint', html: 'CATCH!' }));
+    const wildImgUrl = petImg(wildPet, wildVariant);
+    const petBox = $('div', { class: 'rpg-pet-sprite' });
+    petBox.style.setProperty('--rpg-pet-mask', 'url("' + wildImgUrl + '")');
+    petBox.appendChild($('img', { src: wildImgUrl }));
+    wildEl.appendChild(petBox);
+    wildEl.appendChild($('div', { class: 'label', html: vLabel }));
     wildEl.style.setProperty('--rpg-scale', String(rarityScale(wildPet.rarity)));
     wildEl.style.setProperty('--rpg-catch-scale', String(rarityCatchScale(wildPet.rarity)));
     wildEl.style.setProperty('--rpg-rarity-color', (RARITY_META[wildPet.rarity] && RARITY_META[wildPet.rarity].color) || 'gold');
@@ -1929,10 +2056,11 @@
       const isFirst = state.collection.filter(i => i.petId === caughtPetId && variantOf(i) === caughtVariant).length === 1;
       const label = variantLabel(caughtVariant).toUpperCase();
       const badge = variantBadge(caughtVariant);
+      // Variant badge now shown at bottom of toast, so it uses a top margin instead of trailing <br>.
       const specialLine = caughtVariant !== 'normal'
-        ? '<span style="color:' + (VARIANT_META[caughtVariant].color === 'rainbow' ? '#ff69b4' : VARIANT_META[caughtVariant].color) + ';font-size:18px">' + badge + ' ' + label + ' ' + badge + '</span><br>' : '';
+        ? '<div style="margin-top:8px;color:' + (VARIANT_META[caughtVariant].color === 'rainbow' ? '#ff69b4' : VARIANT_META[caughtVariant].color) + ';font-size:18px">' + badge + ' ' + label + ' ' + badge + '</div>' : '';
       const firstLine = isFirst
-        ? '<br><i>' + (caughtVariant !== 'normal' ? 'Extremely rare variant!' : 'New species unlocked!') + '</i>' : '';
+        ? '<div style="margin-top:8px;font-size:14px;font-weight:700;font-style:italic;letter-spacing:1px;opacity:0.9">' + (caughtVariant !== 'normal' ? 'Extremely rare variant!' : 'New species unlocked!') + '</div>' : '';
       renderPanel();
       // Fire audio + particles + banner. Delay modal to let the celebration breathe.
       const extraDelay = playCatchCelebration(caughtVariant, cx, cy);
@@ -1943,7 +2071,7 @@
         const vc = VARIANT_META[caughtVariant] && VARIANT_META[caughtVariant].color;
         toastColor = (vc && vc !== 'rainbow') ? vc : '#ff69b4';
       }
-      flashCatchToast(specialLine + 'Caught <b>' + caughtName + '</b>!' + firstLine, toastColor);
+      flashCatchToast('Caught <b>' + caughtName + '</b>!' + firstLine + specialLine, toastColor);
     } else {
       wildAttempts++;
       if (wildEl) {
@@ -1960,10 +2088,8 @@
       setTimeout(moveWild, 350);
       if (wildAttempts >= CATCHERS_PER_SPAWN) {
         const name = (wildPet && wildPet.name) || 'pet';
-        const wasVar = wildVariant;
         despawnWild();
-        const prefix = wasVar !== 'normal' ? ('<span style="color:' + (VARIANT_META[wasVar].color === 'rainbow' ? '#ff69b4' : VARIANT_META[wasVar].color) + '">' + variantLabel(wasVar).toUpperCase() + '</span> ') : '';
-        await showModal('The ' + prefix + '<b>' + name + '</b> ran away!');
+        flashCatchToast('<b>' + name + '</b> ran away!', '#ef4444');
       } else {
         catchInProgress = false;
       }
