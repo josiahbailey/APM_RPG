@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      1.4.3
+// @version      1.4.4
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @icon         https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/icon.png
@@ -150,7 +150,7 @@
   };
 
   const NAV_COOLDOWN_MS       = 2000;
-  const PAGE_CHANGE_XP_CHANCE = 0.10;  // 10% chance to award XP on SPA nav
+  const PAGE_CHANGE_XP_CHANCE = 0.15;  // 15% chance to award XP on SPA nav
 
   // EAM's SPA rarely uses pushState/replaceState — most page transitions
   // come through XHR calls to /web/base/<SCREEN>.xmlhttp endpoints. We
@@ -167,7 +167,7 @@
 
 
   const xpToNextLevel = (level) => Math.floor(100 * Math.pow(level, 1.35));
-  const WILD_SPAWN_CHANCE  = 0.02; // rolled once per page load / SPA nav
+  const WILD_SPAWN_CHANCE  = 0.025; // rolled once per page load / SPA nav
   const CATCHERS_PER_SPAWN = 3;
   // Hosted at https://github.com/josiahbailey/APM_RPG (public GitHub).
   // Same URL for @updateURL and @downloadURL — Tampermonkey only reads the
