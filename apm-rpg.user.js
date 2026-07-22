@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      1.4.2
+// @version      1.4.3
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @icon         https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/icon.png
@@ -228,6 +228,7 @@
   const K = {
     version: 'apm_rpg_version', player: 'apm_rpg_player_v2',
     collection: 'apm_rpg_collection_v2', equip: 'apm_rpg_equip_v2',
+    caughtLog: 'apm_rpg_caughtlog_v1',
     starter: 'apm_rpg_starter_granted',
     howto: 'apm_rpg_howto_seen',
     installedVersion: 'apm_rpg_installed_version_v1',
@@ -306,11 +307,13 @@
   const state = {
     player: load(K.player, { level:1, xp:0, username:null, characterId:(CHARACTERS[0]&&CHARACTERS[0].id), hideRoamers:false, panelCollapsed:false }),
     collection: load(K.collection, []),
+    caughtLog: load(K.caughtLog, []),
     equip: load(K.equip, { characterId:(CHARACTERS[0]&&CHARACTERS[0].id), petInstanceIds:[null,null,null], bannerId:'bn_forest' }),
   };
-  const persistPlayer = () => save(K.player, state.player);
+  const persistPlayer     = () => save(K.player,     state.player);
   const persistCollection = () => save(K.collection, state.collection);
-  const persistEquip = () => save(K.equip, state.equip);
+  const persistCaughtLog  = () => save(K.caughtLog,  state.caughtLog);
+  const persistEquip      = () => save(K.equip,      state.equip);
 
   // ================================================================
   // MULTI-TAB SYNC — other tabs pick up state changes in real time
@@ -358,6 +361,8 @@
           state.equip = parsed;
           if (!Array.isArray(state.equip.petInstanceIds)) state.equip.petInstanceIds = [null, null, null];
           if (state.equip.bannerId == null) state.equip.bannerId = 'bn_forest';
+        } else if (name === K.caughtLog) {
+          state.caughtLog = Array.isArray(parsed) ? parsed : [];
         }
         if (typeof renderPanel === 'function' && el && el.panel) renderPanel();
         if ((name === K.equip || name === K.collection) && typeof respawnAllRoamers === 'function') {
@@ -370,6 +375,7 @@
     GM_addValueChangeListener(K.player,     onRemote);
     GM_addValueChangeListener(K.collection, onRemote);
     GM_addValueChangeListener(K.equip,      onRemote);
+    GM_addValueChangeListener(K.caughtLog,  onRemote);
     GM_addValueChangeListener(K.installedVersion, (name, oldRaw, newRaw, remote) => {
       if (!remote) return;
       try {
@@ -393,6 +399,22 @@
     const oldCount = (state.player.reserveCount|0) || 0;
     state.player.reservePets = Array(oldCount).fill(null);
     delete state.player.reserveCount;
+  }
+
+  // CaughtLog: append-only history of every pet ever caught (survives releases).
+  // First-run backfill uses whatever we can reconstruct: current collection +
+  // known reservePets records with pet ids.
+  if (!Array.isArray(state.caughtLog)) state.caughtLog = [];
+  if (state.caughtLog.length === 0 && (state.collection.length > 0 || (state.player.reservePets || []).some(r => r && r.petId))) {
+    const seed = [];
+    for (const inst of state.collection) {
+      seed.push({ petId: inst.petId, variant: (inst.variant || (inst.shiny ? 'shiny' : 'normal')), caughtAt: inst.caughtAt || Date.now() });
+    }
+    for (const rec of (state.player.reservePets || [])) {
+      if (rec && rec.petId) seed.push({ petId: rec.petId, variant: rec.variant || 'normal', caughtAt: Date.now() });
+    }
+    state.caughtLog = seed;
+    save(K.caughtLog, state.caughtLog);
   }
 
   // Starter pet is granted via choice modal (shown at boot if collection is empty).
@@ -1579,19 +1601,19 @@
     const m = $('div', { class: 'rpg-modal', onclick: (e) => { if (e.target === m) m.remove(); } });
     const inner = $('div', { class: 'rpg-modal-inner rpg-dex' });
     inner.appendChild($('h3', { html: 'PET DEX', style: { margin: '0 0 6px', color: 'gold' } }));
-    // Species counter (unique petIds seen, regardless of variant).
-    const speciesSeen = new Set(state.collection.map(i => i.petId)).size;
+    // Species counter (unique petIds ever caught, regardless of variant or current ownership).
+    const speciesSeen = new Set(state.caughtLog.map(e => e.petId)).size;
     inner.appendChild($('div', { class: 'rpg-dex-count', html: speciesSeen + ' / ' + PETS.length }));
     const grid = $('div', { class: 'rpg-dex-grid' });
     for (const p of PETS) {
-      // A species counts as unlocked once ANY variant of it has been caught.
-      const anyCount = state.collection.filter(i => i.petId === p.id).length;
+      // A species counts as unlocked once ANY variant of it has been caught, ever.
+      const anyCount = state.caughtLog.filter(e => e.petId === p.id).length;
       const owned = anyCount > 0;
       const card = $('div', { class: 'rpg-dex-card' + (owned ? '' : ' rpg-dex-silhouette') });
       // Top row: three small diamond badges (shiny / hollow / rainbow)
       const badgeRow = $('div', { class: 'rpg-dex-card-badges' });
       for (const vk of ['shiny', 'hollow', 'rainbow']) {
-        const count = state.collection.filter(i => i.petId === p.id && variantOf(i) === vk).length;
+        const count = state.caughtLog.filter(e => e.petId === p.id && e.variant === vk).length;
         const isOwned = count > 0;
         const mini = $('div', {
           class: 'rpg-dex-mini rpg-dex-mini-' + vk + (isOwned ? ' owned' : ''),
@@ -2273,9 +2295,11 @@
       despawnWild();
       const inst = { instanceId: genInstanceId(), petId: caughtPetId, variant: caughtVariant, caughtAt: Date.now() };
       state.collection.push(inst); persistCollection();
+      state.caughtLog.push({ petId: caughtPetId, variant: caughtVariant, caughtAt: inst.caughtAt });
+      persistCaughtLog();
       const catchXP = (XP_REWARDS.catch && XP_REWARDS.catch[caughtRarity]) || 0;
       if (catchXP > 0) grantPlayerXP(catchXP, 'catch ' + caughtRarity + ' ' + caughtName);
-      const isFirst = state.collection.filter(i => i.petId === caughtPetId && variantOf(i) === caughtVariant).length === 1;
+      const isFirst = state.caughtLog.filter(e => e.petId === caughtPetId && e.variant === caughtVariant).length === 1;
       const label = variantLabel(caughtVariant).toUpperCase();
       const badge = variantBadge(caughtVariant);
       // Variant badge now shown at bottom of toast, so it uses a top margin instead of trailing <br>.
@@ -2345,8 +2369,9 @@
         onclick: () => {
           const inst = { instanceId: 'starter_' + Date.now(), petId: p.id, variant: 'normal', caughtAt: Date.now() };
           state.collection.push(inst);
+          state.caughtLog.push({ petId: p.id, variant: 'normal', caughtAt: inst.caughtAt });
           state.equip.petInstanceIds[0] = inst.instanceId;
-          persistCollection(); persistEquip(); writeRaw(K.starter, '1');
+          persistCollection(); persistCaughtLog(); persistEquip(); writeRaw(K.starter, '1');
           modal.remove();
           renderPanel();
           respawnAllRoamers();
