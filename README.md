@@ -94,16 +94,16 @@ Variants are cosmetic overrides of any base pet and are tracked independently in
 
 ## Nature Reserve
 
-Released pets accumulate in a **Nature Reserve** panel attached to the left side of the pet-selection inventory. The panel shows a 5×2 grid of the first 10 released pets (sprites shown, variant-aware). Each release plays a small walk-into-the-reserve animation and increments a `count / 10` meter. When the meter hits 10, the *Summon Pet* button turns green, pulses slowly, and lets you conjure a wild pet on demand.
+Released pets accumulate in a **Nature Reserve** panel attached to the left side of the pet-selection inventory. The panel shows a row of 5 slots for the first 5 released pets (sprites shown, variant-aware). Each release plays a small walk-into-the-reserve animation and increments a `count / 5` meter. When the meter hits 5, the *Summon Pet* button turns green, pulses slowly, and lets you conjure a wild pet on demand.
 
 Reserve summons use a rarity-boosted weight table (only applies to Reserve summons; normal wild spawns keep the base weights):
 
 - Rare, Epic, Legendary, and Ancient per-pet weights are multiplied by 1.5
 - Common per-pet weight is scaled down so the overall total still equals the base spawn total
 
-Releasing more than 10 pets before summoning stores the surplus (the meter can read `13 / 10`, etc.); the extras start filling the grid once a summon consumes the visible batch.
+Releasing more than 5 pets before summoning stores the surplus (the meter can read `8 / 5`, etc.); the extras start filling the row once a summon consumes the visible batch.
 
-If a wild pet is already on screen when you press *Summon*, the release counter is preserved and the summon is skipped. Otherwise 10 releases are consumed, the pet is summoned with a bouncy scale-in from the reserve, and a rarity-colored toast confirms which pet arrived.
+If a wild pet is already on screen when you press *Summon*, the release counter is preserved and the summon is skipped. Otherwise 5 releases are consumed, the pet is summoned with a bouncy scale-in from the reserve, and a rarity-colored toast confirms which pet arrived.
 
 ## Unlock ladder
 

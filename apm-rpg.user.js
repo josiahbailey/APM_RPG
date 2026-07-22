@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      1.4.4
+// @version      1.4.5
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @icon         https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/icon.png
@@ -976,7 +976,7 @@
     '.rpg-reserve > *{position:relative;z-index:1}',
     '.rpg-reserve-title{font-size:11px;color:#ffd166;letter-spacing:1px;font-weight:800;margin-bottom:2px}',
     '.rpg-reserve-sub{font-size:9px;color:rgba(255,209,102,0.55);font-style:italic;letter-spacing:0.4px;margin-bottom:8px}',
-    '.rpg-reserve-drop{display:grid;grid-template-columns:repeat(5,1fr);gap:2px;padding:4px;box-sizing:border-box;height:80px;border:1.5px dashed #4b5563;border-radius:8px;background:radial-gradient(ellipse at center,rgba(52,211,153,0.10) 0%,rgba(20,20,28,0.5) 70%);margin-bottom:8px}',
+    '.rpg-reserve-drop{display:grid;grid-template-columns:repeat(5,1fr);grid-template-rows:1fr;gap:2px;padding:4px;box-sizing:border-box;height:46px;border:1.5px dashed #4b5563;border-radius:8px;background:radial-gradient(ellipse at center,rgba(52,211,153,0.10) 0%,rgba(20,20,28,0.5) 70%);margin-bottom:8px}',
     '.rpg-reserve-slot{border:1px dashed rgba(148,163,184,0.35);border-radius:3px;display:flex;align-items:center;justify-content:center;overflow:hidden;min-width:0;min-height:0;transition:opacity 260ms ease-out,transform 300ms cubic-bezier(0.34,1.56,0.64,1)}',
     '.rpg-reserve-slot.rpg-reserve-slot-pending{opacity:0;transform:scale(0.3)}',
     '.rpg-reserve-slot img{width:100%;height:100%;object-fit:contain;display:block;image-rendering:pixelated}',
@@ -1242,7 +1242,7 @@
   // Released pets accumulate here. Every 10 releases fills the summon meter,
   // enabling a rarity-boosted wild spawn (1.5x per-pet weight for Rare+; the
   // Common weight is scaled down so overall probability still sums to 1).
-  const RESERVE_TARGET = 10;
+  const RESERVE_TARGET = 5;
   const RESERVE_BOOST  = 1.5;
   const pickReserveWildPet = () => {
     const commons     = PETS.filter(p => p.rarity === 'Common');
