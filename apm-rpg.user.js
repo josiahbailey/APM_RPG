@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      1.3.8
+// @version      1.4.2
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @icon         https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/icon.png
@@ -387,6 +387,13 @@
   // Ensure equip has v3 shape even if a stale object was loaded
   if (!Array.isArray(state.equip.petInstanceIds)) state.equip.petInstanceIds = [null, null, null];
   if (state.equip.bannerId == null || state.equip.bannerId === 'bn_default') state.equip.bannerId = 'bn_forest';
+
+  // Reserve: migrate legacy `reserveCount` (number) to `reservePets` (array of pet records).
+  if (!Array.isArray(state.player.reservePets)) {
+    const oldCount = (state.player.reserveCount|0) || 0;
+    state.player.reservePets = Array(oldCount).fill(null);
+    delete state.player.reserveCount;
+  }
 
   // Starter pet is granted via choice modal (shown at boot if collection is empty).
 
@@ -947,7 +954,11 @@
     '.rpg-reserve > *{position:relative;z-index:1}',
     '.rpg-reserve-title{font-size:11px;color:#ffd166;letter-spacing:1px;font-weight:800;margin-bottom:2px}',
     '.rpg-reserve-sub{font-size:9px;color:rgba(255,209,102,0.55);font-style:italic;letter-spacing:0.4px;margin-bottom:8px}',
-    '.rpg-reserve-drop{height:80px;border:1.5px dashed #4b5563;border-radius:8px;background:radial-gradient(ellipse at center,rgba(52,211,153,0.10) 0%,rgba(20,20,28,0.5) 70%);margin-bottom:8px}',
+    '.rpg-reserve-drop{display:grid;grid-template-columns:repeat(5,1fr);gap:2px;padding:4px;box-sizing:border-box;height:80px;border:1.5px dashed #4b5563;border-radius:8px;background:radial-gradient(ellipse at center,rgba(52,211,153,0.10) 0%,rgba(20,20,28,0.5) 70%);margin-bottom:8px}',
+    '.rpg-reserve-slot{border:1px dashed rgba(148,163,184,0.35);border-radius:3px;display:flex;align-items:center;justify-content:center;overflow:hidden;min-width:0;min-height:0;transition:opacity 260ms ease-out,transform 300ms cubic-bezier(0.34,1.56,0.64,1)}',
+    '.rpg-reserve-slot.rpg-reserve-slot-pending{opacity:0;transform:scale(0.3)}',
+    '.rpg-reserve-slot img{width:100%;height:100%;object-fit:contain;display:block;image-rendering:pixelated}',
+    '.rpg-reserve-slot.rpg-reserve-slot-filled{border-color:transparent;background:rgba(52,211,153,0.08)}',
     '.rpg-reserve-count{font-size:14px;font-weight:800;color:#eee;margin-bottom:8px}',
     '.rpg-reserve-count.ready{color:#34d399}',
     '.rpg-summon-btn{width:100%;padding:8px;background:#33334a;color:#666;border:1px solid #444;border-radius:6px;cursor:not-allowed;font-weight:700;font-size:12px;letter-spacing:0.5px}',
@@ -1159,6 +1170,7 @@
   let menuEl = null;
   let reserveEl = null;
   let _pendingMenuScrollTop = 0;
+  let _pendingReserveIdx = -1; // one-shot signal to buildReservePanel: this slot spawns hidden
   const closeMenu = () => {
     if (menuEl) { menuEl.remove(); menuEl = null; }
     if (reserveEl) { reserveEl.remove(); reserveEl = null; }
@@ -1227,8 +1239,8 @@
     return weighted[weighted.length - 1].pet;
   };
   const summonReservePet = () => {
-    const c = state.player.reserveCount || 0;
-    if (c < RESERVE_TARGET) return;
+    const pets = state.player.reservePets || [];
+    if (pets.length < RESERVE_TARGET) return;
     if (wildEl) {
       flashCatchToast('A wild pet is already roaming \u2014 catch it first!', '#ef4444');
       return;
@@ -1239,7 +1251,8 @@
       const drop = reserveEl.querySelector('.rpg-reserve-drop') || reserveEl;
       originRect = drop.getBoundingClientRect();
     }
-    state.player.reserveCount = c - RESERVE_TARGET;
+    // Consume the first RESERVE_TARGET releases; any surplus rolls over.
+    state.player.reservePets = pets.slice(RESERVE_TARGET);
     persistPlayer();
     const pet = pickReserveWildPet();
     closeMenu();
@@ -1283,8 +1296,29 @@
     const wrap = $('div', { class: 'rpg-reserve' });
     wrap.appendChild($('div', { class: 'rpg-reserve-title', html: 'NATURE RESERVE' }));
     wrap.appendChild($('div', { class: 'rpg-reserve-sub', html: 'release pets to summon' }));
-    wrap.appendChild($('div', { class: 'rpg-reserve-drop' }));
-    const count = state.player.reserveCount || 0;
+    // Drop-zone grid: 10 slots (5x2). Filled left-to-right, top-to-bottom by the
+    // first RESERVE_TARGET pets in reservePets; surplus stays hidden until the
+    // next summon consumes the visible batch.
+    const drop = $('div', { class: 'rpg-reserve-drop' });
+    const pets = state.player.reservePets || [];
+    for (let i = 0; i < RESERVE_TARGET; i++) {
+      const slot = $('div', { class: 'rpg-reserve-slot' });
+      // Apply pending class BEFORE insertion so the browser paints it hidden
+      // on first frame (no transition-in fade-out flash).
+      if (i === _pendingReserveIdx) slot.classList.add('rpg-reserve-slot-pending');
+      const rec = pets[i];
+      if (rec && rec.petId) {
+        const p = petById(rec.petId);
+        if (p) {
+          slot.classList.add('rpg-reserve-slot-filled');
+          slot.appendChild($('img', { src: petImg(p, rec.variant || 'normal') }));
+        }
+      }
+      drop.appendChild(slot);
+    }
+    _pendingReserveIdx = -1;
+    wrap.appendChild(drop);
+    const count = pets.length;
     const ready = count >= RESERVE_TARGET;
     wrap.appendChild($('div', {
       class: 'rpg-reserve-count' + (ready ? ' ready' : ''),
@@ -1488,13 +1522,28 @@
             for (let s = 0; s < state.equip.petInstanceIds.length; s++) {
               if (state.equip.petInstanceIds[s] === inst.instanceId) state.equip.petInstanceIds[s] = null;
             }
-            state.player.reserveCount = (state.player.reserveCount || 0) + 1;
+            state.player.reservePets = state.player.reservePets || [];
+            state.player.reservePets.push({ petId: p.id, variant: v });
             persistCollection(); persistEquip(); persistPlayer();
             _pendingMenuScrollTop = menuEl ? menuEl.scrollTop : 0;
             closeMenu();
             renderPanel();
             respawnAllRoamers();
+            // Signal the pending-slot idx BEFORE buildReservePanel runs
+            // so the slot is born hidden (no fade-out flash on first paint).
+            const _relLen = state.player.reservePets.length;
+            _pendingReserveIdx = (_relLen <= RESERVE_TARGET) ? (_relLen - 1) : -1;
             openMenu('pet', targetSlot);
+            // Pop the slot in at the tail end of the walk animation.
+            if (_relLen <= RESERVE_TARGET && reserveEl) {
+              const _slots = reserveEl.querySelectorAll('.rpg-reserve-slot');
+              const _newSlot = _slots[_relLen - 1];
+              if (_newSlot) {
+                setTimeout(() => {
+                  if (_newSlot && _newSlot.classList) _newSlot.classList.remove('rpg-reserve-slot-pending');
+                }, 750);
+              }
+            }
             // Kick the walk-into-reserve animation now that reserveEl exists.
             animateReleaseToReserve(originRect, releaseImg);
           }
