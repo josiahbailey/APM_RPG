@@ -71,11 +71,11 @@ Catch rate is uniform across variants; rarity affects only spawn chance and XP r
 
 | Rarity | Spawn weight | Base catch rate | Catch XP | Pets |
 |---|---:|---:|---:|---:|
-| Common | 60 | 40% | 5 | 10 |
-| Rare | 25 | 30% | 15 | 7 |
-| Epic | 10 | 20% | 50 | 5 |
-| Legendary | 4 | 15% | 150 | 4 |
-| Ancient | 1 | 10% | 500 | 2 |
+| Common | 60 | 45% | 5 | 10 |
+| Rare | 25 | 35% | 15 | 7 |
+| Epic | 10 | 25% | 50 | 5 |
+| Legendary | 4 | 20% | 150 | 4 |
+| Ancient | 1 | 15% | 500 | 2 |
 
 Each pet in a rarity gets that spawn weight, so 10 Commons at weight 60 each (600 total) vs. 2 Ancients at weight 1 each (2 total) out of 843 grand total means Commons hit ~71% of spawns and Ancients ~0.24%.
 
@@ -141,16 +141,16 @@ The first three portraits are Lv 1 starters. The rest step up by 2 levels each:
 | Banner | Level |
 |---|---:|
 | None | 1 |
-| Forest | 3 |
-| Desert | 6 |
-| Snow | 9 |
-| Night Sky | 12 |
-| Volcano | 15 |
-| Ocean | 18 |
-| Meadow | 21 |
-| Void | 24 |
-| Gold | 27 |
-| Prismatic | 30 |
+| Banner_1 | 3 |
+| Banner_2 | 6 |
+| Banner_3 | 9 |
+| Banner_4 | 12 |
+| Banner_5 | 15 |
+| Banner_6 | 18 |
+| Banner_7 | 21 |
+| Banner_8 | 24 |
+| Banner_9 | 27 |
+| Banner_10 | 30 |
 
 ## Starter selection & how-to modal
 

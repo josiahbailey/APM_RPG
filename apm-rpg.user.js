@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      1.4.5
+// @version      1.4.6
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @icon         https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/icon.png
@@ -46,11 +46,11 @@
   // is the weight used in weighted random spawn selection (each pet in the rarity gets
   // this weight, so 3 commons × 60 / 300 total = 60% overall spawn chance for commons).
   const RARITY_META = {
-    Common:    { tier: 1, catchRate: 0.40, spawnWeight: 60, color: '#9ca3af' },
-    Rare:      { tier: 2, catchRate: 0.30, spawnWeight: 25, color: '#3b82f6' },
-    Epic:      { tier: 3, catchRate: 0.20, spawnWeight: 10, color: '#a855f7' },
-    Legendary: { tier: 4, catchRate: 0.15, spawnWeight: 4,  color: '#f59e0b' },
-    Ancient:   { tier: 5, catchRate: 0.10, spawnWeight: 1,  color: '#ef4444' },
+    Common:    { tier: 1, catchRate: 0.45, spawnWeight: 60, color: '#9ca3af' },
+    Rare:      { tier: 2, catchRate: 0.35, spawnWeight: 25, color: '#3b82f6' },
+    Epic:      { tier: 3, catchRate: 0.25, spawnWeight: 10, color: '#a855f7' },
+    Legendary: { tier: 4, catchRate: 0.20, spawnWeight: 4,  color: '#f59e0b' },
+    Ancient:   { tier: 5, catchRate: 0.15, spawnWeight: 1,  color: '#ef4444' },
   };
   const RARITY_ORDER = ['Common', 'Rare', 'Epic', 'Legendary', 'Ancient'];
 
