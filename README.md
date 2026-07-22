@@ -71,8 +71,8 @@ Catch rate is uniform across variants; rarity affects only spawn chance and XP r
 
 | Rarity | Spawn weight | Base catch rate | Catch XP | Pets |
 |---|---:|---:|---:|---:|
-| Common | 60 | 60% | 5 | 10 |
-| Rare | 25 | 40% | 15 | 6 |
+| Common | 60 | 40% | 5 | 10 |
+| Rare | 25 | 30% | 15 | 6 |
 | Epic | 10 | 20% | 50 | 4 |
 | Legendary | 4 | 15% | 150 | 4 |
 | Ancient | 1 | 10% | 500 | 2 |
@@ -91,6 +91,17 @@ Every wild spawn independently rolls for a variant, cascading rarest first:
 | Normal | 98.4% | Base sparkle only |
 
 Variants are cosmetic overrides of any base pet and are tracked independently in the Dex.
+
+## Nature Reserve
+
+Released pets accumulate in a **Nature Reserve** panel attached to the left side of the pet-selection inventory. Each release plays a small walk-into-the-reserve animation and increments a `count / 10` meter. When the meter hits 10, the *Summon Pet* button turns green, pulses slowly, and lets you conjure a wild pet on demand.
+
+Reserve summons use a rarity-boosted weight table (only applies to Reserve summons; normal wild spawns keep the base weights):
+
+- Rare, Epic, Legendary, and Ancient per-pet weights are multiplied by 1.5
+- Common per-pet weight is scaled down so the overall total still equals the base spawn total
+
+If a wild pet is already on screen when you press *Summon*, the release counter is preserved and the summon is skipped. Otherwise 10 releases are consumed, the pet is summoned with a bouncy scale-in from the reserve, and a rarity-colored toast confirms which pet arrived.
 
 ## Unlock ladder
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      1.2.0
+// @version      1.3.8
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @icon         https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/icon.png
@@ -46,8 +46,8 @@
   // is the weight used in weighted random spawn selection (each pet in the rarity gets
   // this weight, so 3 commons × 60 / 300 total = 60% overall spawn chance for commons).
   const RARITY_META = {
-    Common:    { tier: 1, catchRate: 0.60, spawnWeight: 60, color: '#9ca3af' },
-    Rare:      { tier: 2, catchRate: 0.40, spawnWeight: 25, color: '#3b82f6' },
+    Common:    { tier: 1, catchRate: 0.40, spawnWeight: 60, color: '#9ca3af' },
+    Rare:      { tier: 2, catchRate: 0.30, spawnWeight: 25, color: '#3b82f6' },
     Epic:      { tier: 3, catchRate: 0.20, spawnWeight: 10, color: '#a855f7' },
     Legendary: { tier: 4, catchRate: 0.15, spawnWeight: 4,  color: '#f59e0b' },
     Ancient:   { tier: 5, catchRate: 0.10, spawnWeight: 1,  color: '#ef4444' },
@@ -274,7 +274,7 @@
           eq.petInstanceIds = [eq.petInstanceId || null, null, null];
           delete eq.petInstanceId;
         }
-        if (eq.bannerId == null) eq.bannerId = 'bn_none';
+        if (eq.bannerId == null) eq.bannerId = 'bn_forest';
         save(K.equip, eq);
       }
     }
@@ -306,7 +306,7 @@
   const state = {
     player: load(K.player, { level:1, xp:0, username:null, characterId:(CHARACTERS[0]&&CHARACTERS[0].id), hideRoamers:false, panelCollapsed:false }),
     collection: load(K.collection, []),
-    equip: load(K.equip, { characterId:(CHARACTERS[0]&&CHARACTERS[0].id), petInstanceIds:[null,null,null], bannerId:'bn_none' }),
+    equip: load(K.equip, { characterId:(CHARACTERS[0]&&CHARACTERS[0].id), petInstanceIds:[null,null,null], bannerId:'bn_forest' }),
   };
   const persistPlayer = () => save(K.player, state.player);
   const persistCollection = () => save(K.collection, state.collection);
@@ -357,7 +357,7 @@
         } else if (name === K.equip) {
           state.equip = parsed;
           if (!Array.isArray(state.equip.petInstanceIds)) state.equip.petInstanceIds = [null, null, null];
-          if (state.equip.bannerId == null) state.equip.bannerId = 'bn_none';
+          if (state.equip.bannerId == null) state.equip.bannerId = 'bn_forest';
         }
         if (typeof renderPanel === 'function' && el && el.panel) renderPanel();
         if ((name === K.equip || name === K.collection) && typeof respawnAllRoamers === 'function') {
@@ -386,7 +386,7 @@
 
   // Ensure equip has v3 shape even if a stale object was loaded
   if (!Array.isArray(state.equip.petInstanceIds)) state.equip.petInstanceIds = [null, null, null];
-  if (state.equip.bannerId == null) state.equip.bannerId = 'bn_none';
+  if (state.equip.bannerId == null || state.equip.bannerId === 'bn_default') state.equip.bannerId = 'bn_forest';
 
   // Starter pet is granted via choice modal (shown at boot if collection is empty).
 
@@ -941,6 +941,22 @@
     '@keyframes rpgBannerPop{0%{transform:translate(-50%,-50%) scale(0.3) rotate(-10deg);opacity:0}20%{transform:translate(-50%,-50%) scale(1.15) rotate(2deg);opacity:1}30%{transform:translate(-50%,-50%) scale(1) rotate(0deg)}80%{transform:translate(-50%,-50%) scale(1) rotate(0deg);opacity:1}100%{transform:translate(-50%,-50%) scale(0.85) rotate(0deg);opacity:0}}',
     '.rpg-panel-shake{animation:rpgPanelShake 700ms cubic-bezier(0.36,0.07,0.19,0.97) both}',
     '@keyframes rpgPanelShake{10%,90%{transform:translate3d(-1px,0,0)}20%,80%{transform:translate3d(2px,0,0)}30%,50%,70%{transform:translate3d(-4px,0,0)}40%,60%{transform:translate3d(4px,0,0)}}',
+    '.rpg-menu.rpg-menu-pet{max-height:42vh;width:340px;max-width:340px;min-width:340px;box-sizing:border-box}',
+    '.rpg-reserve{position:fixed;right:364px;bottom:110px;z-index:2147483001;background:rgba(20,20,28,0.45);border:1px solid #3b3b48;border-radius:12px;padding:10px;color:#eee;width:150px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.6);box-sizing:border-box;overflow:hidden;backdrop-filter:blur(2px)}',
+    '.rpg-reserve::before{content:"";position:absolute;inset:0;background-image:var(--rpg-banner-img,none);background-size:cover;background-position:center;background-repeat:no-repeat;opacity:0.35;pointer-events:none;border-radius:inherit;z-index:0}',
+    '.rpg-reserve > *{position:relative;z-index:1}',
+    '.rpg-reserve-title{font-size:11px;color:#ffd166;letter-spacing:1px;font-weight:800;margin-bottom:2px}',
+    '.rpg-reserve-sub{font-size:9px;color:rgba(255,209,102,0.55);font-style:italic;letter-spacing:0.4px;margin-bottom:8px}',
+    '.rpg-reserve-drop{height:80px;border:1.5px dashed #4b5563;border-radius:8px;background:radial-gradient(ellipse at center,rgba(52,211,153,0.10) 0%,rgba(20,20,28,0.5) 70%);margin-bottom:8px}',
+    '.rpg-reserve-count{font-size:14px;font-weight:800;color:#eee;margin-bottom:8px}',
+    '.rpg-reserve-count.ready{color:#34d399}',
+    '.rpg-summon-btn{width:100%;padding:8px;background:#33334a;color:#666;border:1px solid #444;border-radius:6px;cursor:not-allowed;font-weight:700;font-size:12px;letter-spacing:0.5px}',
+    '.rpg-summon-btn.ready{background:linear-gradient(135deg,#059669,#10b981);color:#fff;border:1px solid #34d399;cursor:pointer;animation:rpgSummonPulse 2s ease-in-out infinite}',
+    '@keyframes rpgSummonPulse{0%,100%{box-shadow:0 0 6px rgba(52,211,153,0.4);filter:brightness(1)}50%{box-shadow:0 0 20px rgba(52,211,153,0.9);filter:brightness(1.15)}}',
+    '.rpg-release-anim{position:fixed;pointer-events:none;z-index:2147483647}',
+    '.rpg-release-anim img{width:100%;height:100%;object-fit:contain;display:block}',
+    '.rpg-release-walking img{animation:rpgReleaseWalk 320ms ease-in-out infinite;transform-origin:50% 90%}',
+    '@keyframes rpgReleaseWalk{0%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-3px) rotate(4deg)}100%{transform:translateY(0) rotate(-4deg)}}',
   ].join('\n'));
 
   // ================================================================
@@ -1086,18 +1102,16 @@
   };
 
   const applyBanner = () => {
-    if (!el.panel) return;
     const b = bannerById(state.equip.bannerId);
-    // Banner image goes on ::before at reduced opacity so the panel's transparent
-    // rgba background still lets the page show through — matches the default
-    // no-banner look regardless of whether the image is opaque.
+    // Banner image goes on ::before at reduced opacity so the transparent rgba
+    // backgrounds still let the page show through. Set on root so both the
+    // main panel AND the nature-reserve panel inherit the same banner image.
     if (b && b.img) {
-      el.panel.style.setProperty('--rpg-banner-img', 'url("' + b.img + '")');
+      root.style.setProperty('--rpg-banner-img', 'url("' + b.img + '")');
     } else {
-      el.panel.style.removeProperty('--rpg-banner-img');
+      root.style.removeProperty('--rpg-banner-img');
     }
-    // Clear any legacy inline backgroundImage from prior versions.
-    el.panel.style.backgroundImage = '';
+    if (el.panel) el.panel.style.backgroundImage = '';
   };
   const renderPanel = () => {
     if (!el.panel) return;
@@ -1143,8 +1157,13 @@
   };
 
   let menuEl = null;
-  const closeMenu = () => { if (menuEl) { menuEl.remove(); menuEl = null; } };
-  const setupMenuDismiss = () => { setTimeout(() => { const off = (e) => { if (menuEl && !menuEl.contains(e.target) && !el.panel.contains(e.target)) { closeMenu(); document.removeEventListener('mousedown', off); } }; document.addEventListener('mousedown', off); }, 50); };
+  let reserveEl = null;
+  let _pendingMenuScrollTop = 0;
+  const closeMenu = () => {
+    if (menuEl) { menuEl.remove(); menuEl = null; }
+    if (reserveEl) { reserveEl.remove(); reserveEl = null; }
+  };
+  const setupMenuDismiss = () => { setTimeout(() => { const off = (e) => { if (menuEl && !menuEl.contains(e.target) && !(reserveEl && reserveEl.contains(e.target)) && !el.panel.contains(e.target)) { closeMenu(); document.removeEventListener('mousedown', off); } }; document.addEventListener('mousedown', off); }, 50); };
 
   // Custom release confirmation, positioned at the mouse cursor. Replaces the
   // synchronous browser confirm() with a floating tooltip. Returns Promise<bool>.
@@ -1183,6 +1202,139 @@
       setTimeout(() => document.addEventListener('mousedown', outside, true), 0);
       window.addEventListener('keydown', onKey, true);
     });
+  };
+
+  // ── Nature Reserve ──────────────────────────────────────────
+  // Released pets accumulate here. Every 10 releases fills the summon meter,
+  // enabling a rarity-boosted wild spawn (1.5x per-pet weight for Rare+; the
+  // Common weight is scaled down so overall probability still sums to 1).
+  const RESERVE_TARGET = 10;
+  const RESERVE_BOOST  = 1.5;
+  const pickReserveWildPet = () => {
+    const commons     = PETS.filter(p => p.rarity === 'Common');
+    const nonCommons  = PETS.filter(p => p.rarity !== 'Common');
+    const baseTotal   = PETS.reduce((s, p) => s + p.spawnWeight, 0);
+    const nonComTotal = nonCommons.reduce((s, p) => s + p.spawnWeight, 0) * RESERVE_BOOST;
+    const comBaseTot  = commons.reduce((s, p) => s + p.spawnWeight, 0);
+    const comScale    = comBaseTot > 0 ? Math.max(0, (baseTotal - nonComTotal) / comBaseTot) : 0;
+    const weighted = PETS.map(p => ({
+      pet: p,
+      w: p.rarity === 'Common' ? p.spawnWeight * comScale : p.spawnWeight * RESERVE_BOOST,
+    }));
+    const total = weighted.reduce((s, e) => s + e.w, 0);
+    let r = Math.random() * total;
+    for (const e of weighted) { r -= e.w; if (r <= 0) return e.pet; }
+    return weighted[weighted.length - 1].pet;
+  };
+  const summonReservePet = () => {
+    const c = state.player.reserveCount || 0;
+    if (c < RESERVE_TARGET) return;
+    if (wildEl) {
+      flashCatchToast('A wild pet is already roaming \u2014 catch it first!', '#ef4444');
+      return;
+    }
+    // Capture reserve position BEFORE menu close (reserveEl is removed by closeMenu).
+    let originRect = null;
+    if (reserveEl) {
+      const drop = reserveEl.querySelector('.rpg-reserve-drop') || reserveEl;
+      originRect = drop.getBoundingClientRect();
+    }
+    state.player.reserveCount = c - RESERVE_TARGET;
+    persistPlayer();
+    const pet = pickReserveWildPet();
+    closeMenu();
+    spawnWild({ pet });
+    animateSummonFromReserve(originRect);
+    const rColor = (RARITY_META[pet.rarity] && RARITY_META[pet.rarity].color) || 'gold';
+    flashCatchToast('<b>' + pet.name + '</b> was summoned!', rColor);
+  };
+  const animateSummonFromReserve = (originRect) => {
+    if (!wildEl || !originRect) return;
+    const fx = parseFloat(wildEl.style.left) || 0;
+    const fy = parseFloat(wildEl.style.top)  || 0;
+    const w  = wildEl.offsetWidth  || 100;
+    const h  = wildEl.offsetHeight || 100;
+    const ox = Math.floor(originRect.left + originRect.width  / 2 - w / 2);
+    const oy = Math.floor(originRect.top  + originRect.height / 2 - h / 2);
+    wildEl.style.transition = 'none';
+    wildEl.style.left = ox + 'px';
+    wildEl.style.top  = oy + 'px';
+    wildEl.style.transform = 'scale(0.15)';
+    wildEl.style.opacity = '0.15';
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (!wildEl) return;
+      wildEl.style.transition = 'left 800ms cubic-bezier(0.34,1.56,0.64,1), top 800ms cubic-bezier(0.34,1.56,0.64,1), transform 800ms cubic-bezier(0.34,1.56,0.64,1), opacity 400ms ease-in';
+      wildEl.style.left = Math.floor(fx) + 'px';
+      wildEl.style.top  = Math.floor(fy) + 'px';
+      wildEl.style.transform = 'scale(1)';
+      wildEl.style.opacity = '1';
+      setTimeout(() => {
+        if (!wildEl) return;
+        wildEl.style.transition = '';
+        wildEl.style.transform  = '';
+        wildEl.style.opacity    = '';
+        // Kick a drift target immediately so the pet doesn't idle at the
+        // spawn spot until the setInterval(moveWild, 3000) tick fires.
+        moveWild();
+      }, 860);
+    }));
+  };
+  const buildReservePanel = () => {
+    const wrap = $('div', { class: 'rpg-reserve' });
+    wrap.appendChild($('div', { class: 'rpg-reserve-title', html: 'NATURE RESERVE' }));
+    wrap.appendChild($('div', { class: 'rpg-reserve-sub', html: 'release pets to summon' }));
+    wrap.appendChild($('div', { class: 'rpg-reserve-drop' }));
+    const count = state.player.reserveCount || 0;
+    const ready = count >= RESERVE_TARGET;
+    wrap.appendChild($('div', {
+      class: 'rpg-reserve-count' + (ready ? ' ready' : ''),
+      html: count + ' / ' + RESERVE_TARGET,
+    }));
+    const btn = $('button', {
+      class: 'rpg-summon-btn' + (ready ? ' ready' : ''),
+      html: 'Summon Pet',
+      onclick: (e) => {
+        e.stopPropagation();
+        if (!ready) return;
+        summonReservePet();
+      },
+    });
+    if (!ready) btn.disabled = true;
+    wrap.appendChild(btn);
+    return wrap;
+  };
+  const animateReleaseToReserve = (originRect, imgUrl) => {
+    if (!reserveEl) return;
+    const drop = reserveEl.querySelector('.rpg-reserve-drop') || reserveEl;
+    const tR = drop.getBoundingClientRect();
+    const clone = $('div', { class: 'rpg-release-anim rpg-release-walking' });
+    clone.appendChild($('img', { src: imgUrl }));
+    const w = Math.max(48, originRect.width);
+    const h = Math.max(48, originRect.height);
+    Object.assign(clone.style, {
+      left:   originRect.left + 'px',
+      top:    originRect.top  + 'px',
+      width:  w + 'px',
+      height: h + 'px',
+      transition: 'left 800ms cubic-bezier(0.4,0.05,0.3,1), top 800ms cubic-bezier(0.4,0.05,0.3,1), transform 400ms cubic-bezier(0.5,0,1,0.5), opacity 400ms ease-in',
+    });
+    root.appendChild(clone);
+    const targetX = tR.left + tR.width  / 2 - w / 2;
+    const targetY = tR.top  + tR.height / 2 - h / 2;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      clone.style.left = targetX + 'px';
+      clone.style.top  = targetY + 'px';
+    }));
+    setTimeout(() => {
+      clone.classList.remove('rpg-release-walking');
+      const cx = tR.left + tR.width / 2, cy = tR.top + tR.height / 2;
+      clone.style.transformOrigin = 'center center';
+      clone.style.left = (cx - w / 2) + 'px';
+      clone.style.top  = (cy - h / 2) + 'px';
+      clone.style.transform = 'scale(0)';
+      clone.style.opacity = '0';
+    }, 820);
+    setTimeout(() => { if (clone.parentNode) clone.remove(); }, 1300);
   };
 
   const openMenu = (kind, slotIdx) => {
@@ -1258,12 +1410,17 @@
 
     } else {
       // Pet collection for a specific slot
+      menuEl.classList.add('rpg-menu-pet');
       const targetSlot = (slotIdx == null) ? 0 : slotIdx;
       menuEl.appendChild($('h4', { html: 'PICK PET FOR SLOT ' + (targetSlot + 1) }));
 
       if (state.collection.length === 0) {
         menuEl.appendChild($('div', { class: 'rpg-empty-msg', html: 'No pets yet! Encounter wild pets to build your collection.' }));
-        root.appendChild(menuEl); setupMenuDismiss(); return;
+        root.appendChild(menuEl);
+        reserveEl = buildReservePanel();
+        root.appendChild(reserveEl);
+        setupMenuDismiss();
+        return;
       }
 
       const grid = $('div', { class: 'rpg-menu-grid' });
@@ -1323,15 +1480,23 @@
             const labelName = (v !== 'normal' ? variantLabel(v) + ' ' : '') + p.name;
             const confirmed = await showReleasePrompt(labelName, e.clientX, e.clientY);
             if (!confirmed) return;
+            // Capture origin rect + image BEFORE menu closes.
+            const tileEl = e.target.closest('.rpg-menu-item') || item;
+            const originRect = tileEl.getBoundingClientRect();
+            const releaseImg = petImg(p, v);
             state.collection = state.collection.filter(x => x.instanceId !== inst.instanceId);
             for (let s = 0; s < state.equip.petInstanceIds.length; s++) {
               if (state.equip.petInstanceIds[s] === inst.instanceId) state.equip.petInstanceIds[s] = null;
             }
-            persistCollection(); persistEquip();
+            state.player.reserveCount = (state.player.reserveCount || 0) + 1;
+            persistCollection(); persistEquip(); persistPlayer();
+            _pendingMenuScrollTop = menuEl ? menuEl.scrollTop : 0;
             closeMenu();
             renderPanel();
             respawnAllRoamers();
             openMenu('pet', targetSlot);
+            // Kick the walk-into-reserve animation now that reserveEl exists.
+            animateReleaseToReserve(originRect, releaseImg);
           }
         });
         item.appendChild(delBtn);
@@ -1345,6 +1510,14 @@
     }
 
     root.appendChild(menuEl);
+    if (kind !== 'character') {
+      reserveEl = buildReservePanel();
+      root.appendChild(reserveEl);
+    }
+    if (_pendingMenuScrollTop && menuEl) {
+      menuEl.scrollTop = _pendingMenuScrollTop;
+      _pendingMenuScrollTop = 0;
+    }
     setupMenuDismiss();
   };
 
@@ -1986,10 +2159,10 @@
     wildEl.style.top  = Math.floor(t.y) + 'px';
   };
 
-  const spawnWild = () => {
+  const spawnWild = (opts) => {
     if (wildEl) return;
-    wildPet = pickWildPet();
-    wildVariant = rollVariant();
+    wildPet = (opts && opts.pet) ? opts.pet : pickWildPet();
+    wildVariant = (opts && opts.variant) ? opts.variant : rollVariant();
     wildAttempts = 0;
     const special = wildVariant !== 'normal';
     const cls = 'rpg-wild rpg-catchable' + variantClassStr(wildPet, wildVariant) + (special ? ' rpg-wild-special' : '');
