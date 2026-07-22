@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      1.4.6
+// @version      1.4.7
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @icon         https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/icon.png
@@ -2181,6 +2181,14 @@
   setInterval(() => {
     // Only idle roamers participate: grabbed pets stay locked to the cursor and
     // tossed pets already have their own per-frame collision logic.
+    // Early-out: a collision needs at least two idle roamers. Skipping the DOM
+    // reads when this isn't the case avoids ~5 forced layouts/sec in the common
+    // 0- or 1-pet case (early levels, dragging, empty slots).
+    let idleCount = 0;
+    for (let i = 0; i < roamers.length; i++) {
+      if (roamers[i] && rmCtx(i).state === 'idle') idleCount++;
+    }
+    if (idleCount < 2) return;
     const idleEls = [];
     for (let i = 0; i < roamers.length; i++) {
       if (roamers[i] && rmCtx(i).state === 'idle') idleEls.push(roamers[i]);
@@ -2205,7 +2213,7 @@
         redirectSpriteAwayFrom(idleEls[b], bCX, bCY, rb.width, rb.height,  nx,  ny);
       }
     }
-  }, 200);
+  }, 400);
 
 
 
