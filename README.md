@@ -16,7 +16,7 @@ Zero backend. All state lives in Tampermonkey's storage, scoped to your browser 
    https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/apm-rpg.user.js
    ```
 3. Tampermonkey shows an install prompt. Click **Install**.
-4. Open an EAM / APM / PTP tab. The RPG panel appears at the top-left.
+4. Open an EAM / APM / PTP tab. The RPG panel appears at the bottom-right.
 
 Updates are automatic: Tampermonkey polls the raw URL on its own schedule, and the script itself does a rate-limited check every 5 minutes. When a newer version exists, a small pulsing **UPDATE →** button appears next to the panel; clicking it opens the raw URL so Tampermonkey can install the diff. The button also hides when the panel is collapsed.
 
@@ -30,7 +30,7 @@ Updates are automatic: Tampermonkey polls the raw URL on its own schedule, and t
 
 ## How to play
 
-APM RPG runs quietly in the background while you work. Every time you navigate around EAM, you have a chance to earn **XP** and to spot a **wild pet** drifting across your screen — click it to try to catch it. Level up to unlock extra pet slots, new character portraits, and new banners. That's it. Get to work.
+APM RPG runs quietly in the background while you work. Every time you navigate around EAM, you have a chance to earn **XP** and to spot a **wild pet** drifting near the bottom-right of your screen — click it to try to catch it. Level up to unlock extra pet slots, new character portraits, and new banners. That's it. Get to work.
 
 ## Earning XP
 
@@ -62,7 +62,7 @@ Wild pets spawn on page load and on qualifying nav events, at a 2.5% roll each t
 
 - Picks a pet using weighted-random selection (see rarity table)
 - Independently rolls for a Shiny / Hollow / Rainbow variant
-- Places the pet in the arc-shaped roam zone around the RPG panel
+- Places the pet in the circular roam zone anchored at the bottom-right corner (radius ~34% of the shorter viewport axis)
 - Gives you **3 catch attempts** — each click rolls against the pet's base catch rate
 
 Catch rate is uniform across variants; rarity affects only spawn chance and XP reward.
@@ -72,12 +72,12 @@ Catch rate is uniform across variants; rarity affects only spawn chance and XP r
 | Rarity | Spawn weight | Base catch rate | Catch XP | Pets |
 |---|---:|---:|---:|---:|
 | Common | 60 | 40% | 5 | 10 |
-| Rare | 25 | 30% | 15 | 6 |
-| Epic | 10 | 20% | 50 | 4 |
+| Rare | 25 | 30% | 15 | 7 |
+| Epic | 10 | 20% | 50 | 5 |
 | Legendary | 4 | 15% | 150 | 4 |
 | Ancient | 1 | 10% | 500 | 2 |
 
-Each pet in a rarity gets that spawn weight, so 10 commons at weight 60 each vs. 2 ancients at weight 1 each means commons are heavily favored.
+Each pet in a rarity gets that spawn weight, so 10 Commons at weight 60 each (600 total) vs. 2 Ancients at weight 1 each (2 total) out of 843 grand total means Commons hit ~71% of spawns and Ancients ~0.24%.
 
 ### Variant table
 
@@ -94,12 +94,14 @@ Variants are cosmetic overrides of any base pet and are tracked independently in
 
 ## Nature Reserve
 
-Released pets accumulate in a **Nature Reserve** panel attached to the left side of the pet-selection inventory. Each release plays a small walk-into-the-reserve animation and increments a `count / 10` meter. When the meter hits 10, the *Summon Pet* button turns green, pulses slowly, and lets you conjure a wild pet on demand.
+Released pets accumulate in a **Nature Reserve** panel attached to the left side of the pet-selection inventory. The panel shows a 5×2 grid of the first 10 released pets (sprites shown, variant-aware). Each release plays a small walk-into-the-reserve animation and increments a `count / 10` meter. When the meter hits 10, the *Summon Pet* button turns green, pulses slowly, and lets you conjure a wild pet on demand.
 
 Reserve summons use a rarity-boosted weight table (only applies to Reserve summons; normal wild spawns keep the base weights):
 
 - Rare, Epic, Legendary, and Ancient per-pet weights are multiplied by 1.5
 - Common per-pet weight is scaled down so the overall total still equals the base spawn total
+
+Releasing more than 10 pets before summoning stores the surplus (the meter can read `13 / 10`, etc.); the extras start filling the grid once a summon consumes the visible batch.
 
 If a wild pet is already on screen when you press *Summon*, the release counter is preserved and the summon is skipped. Otherwise 10 releases are consumed, the pet is summoned with a bouncy scale-in from the reserve, and a rarity-colored toast confirms which pet arrived.
 
@@ -156,12 +158,12 @@ On first install, you pick one of three starter pets (Mossmo, Sizzly, Ribub). On
 
 ## Panel
 
-The panel sits at the top-left and holds:
+The panel sits at the bottom-right and holds:
 
 - Character portrait, username, XP bar, and level
 - Three pet slots (locked slots show `Lv N`)
-- A collapse tab on the right edge — click to slide the panel behind a thin strip
-- A **Dex** button that opens the full pet index (species counter, variant labels, per-pet catch history, per-pet release)
+- A collapse tab on the left edge — click to slide the panel off-screen behind a thin strip
+- A **Dex** button that opens the full pet index — species counter, variant badges, and per-pet lifetime catch count that survives releases
 - An update button that pulses green when a newer version is available
 
 Clicking the portrait opens the customize menu (character + banner sliders). Clicking a pet slot opens the pet swap menu for that slot.
