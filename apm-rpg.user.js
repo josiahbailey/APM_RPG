@@ -1255,6 +1255,9 @@
     el.bar.firstChild.style.width = clamp((state.player.xp / need) * 100, 0, 100) + '%';
     el.xpTxt.textContent = 'EXP ' + state.player.xp + ' / ' + need;
     if (el.hidePetsBtn) el.hidePetsBtn.textContent = state.player.hideRoamers ? 'Show Pets' : 'Hide Pets';
+    // Slot-related guardrails: drop stale seat records and re-evaluate chair visibility.
+    pruneOrphanSeats();
+    updateChairsVisibility();
     if (el.updateBtn) {
       // Show UPDATE only when the GitHub check found something newer, this
       // tab is still on the older version, and the panel isn't collapsed.
@@ -2322,11 +2325,41 @@
   let resetAllBtn = null;
   const updateChairsVisibility = () => {
     const hidden = !!state.player.hideRoamers;
-    for (const c of CHAIR_HOMES) {
+    const nSlots = unlockedSlotCount();
+    const toUnseat = [];
+    for (let i = 0; i < CHAIR_HOMES.length; i++) {
+      const c = CHAIR_HOMES[i];
       const el = chairEls[c.id]; if (!el) continue;
-      el.style.display = hidden ? 'none' : '';
+      const visible = !hidden && i < nSlots;
+      el.style.display = visible ? '' : 'none';
+      // If this chair is now hidden but still holds a pet, un-seat it — the
+      // slot no longer exists to keep track of that pet.
+      if (!visible && state.player.seats && state.player.seats[c.id]) {
+        toUnseat.push(state.player.seats[c.id]);
+      }
     }
-    if (resetAllBtn) resetAllBtn.style.display = hidden ? 'none' : '';
+    for (const iid of toUnseat) unseatPet(iid);
+    if (resetAllBtn) {
+      const nVis = hidden ? 0 : Math.min(nSlots, CHAIR_HOMES.length);
+      if (nVis === 0) {
+        resetAllBtn.style.display = 'none';
+      } else {
+        resetAllBtn.style.display = '';
+        resetAllBtn.style.left = (CHAIR_HOMES[nVis - 1].left + CHAIR_WIDTH + 8) + 'px';
+      }
+    }
+  };
+  // Guardrail: drop any seat entry whose pet is no longer equipped in an
+  // active slot. Called from renderPanel after slot changes.
+  const pruneOrphanSeats = () => {
+    if (!state.player.seats) return;
+    const equipped = new Set(state.equip.petInstanceIds.filter(x => x != null));
+    const toClear = [];
+    for (const c of CHAIR_HOMES) {
+      const iid = state.player.seats[c.id];
+      if (iid && !equipped.has(iid)) toClear.push(iid);
+    }
+    for (const iid of toClear) unseatPet(iid);
   };
   const resetAllChairsToHome = () => {
     for (const c of CHAIR_HOMES) {
