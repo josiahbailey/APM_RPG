@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      1.4.7
+// @version      1.5.0
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @icon         https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/icon.png
@@ -393,6 +393,23 @@
   // Ensure equip has v3 shape even if a stale object was loaded
   if (!Array.isArray(state.equip.petInstanceIds)) state.equip.petInstanceIds = [null, null, null];
   if (state.equip.bannerId == null || state.equip.bannerId === 'bn_default') state.equip.bannerId = 'bn_forest';
+
+  // Beanbag chairs: map of chairId -> occupying pet instanceId (or null).
+  if (!state.player.seats || typeof state.player.seats !== 'object') {
+    state.player.seats = { ch_a: null, ch_b: null, ch_c: null };
+  } else {
+    if (!('ch_a' in state.player.seats)) state.player.seats.ch_a = null;
+    if (!('ch_b' in state.player.seats)) state.player.seats.ch_b = null;
+    if (!('ch_c' in state.player.seats)) state.player.seats.ch_c = null;
+  }
+  // Beanbag chair positions: null = at home; else { left, top } in px viewport coords.
+  if (!state.player.chairs || typeof state.player.chairs !== 'object') {
+    state.player.chairs = { ch_a: null, ch_b: null, ch_c: null };
+  } else {
+    if (!('ch_a' in state.player.chairs)) state.player.chairs.ch_a = null;
+    if (!('ch_b' in state.player.chairs)) state.player.chairs.ch_b = null;
+    if (!('ch_c' in state.player.chairs)) state.player.chairs.ch_c = null;
+  }
 
   // Reserve: migrate legacy `reserveCount` (number) to `reservePets` (array of pet records).
   if (!Array.isArray(state.player.reservePets)) {
@@ -989,6 +1006,21 @@
     '.rpg-release-anim{position:fixed;pointer-events:none;z-index:2147483647}',
     '.rpg-release-anim img{width:100%;height:100%;object-fit:contain;display:block}',
     '.rpg-release-walking img{animation:rpgReleaseWalk 320ms ease-in-out infinite;transform-origin:50% 90%}',
+    '.rpg-chair{position:fixed;width:64px;height:22px;bottom:14px;z-index:2147482850;cursor:grab;opacity:0.25;background:radial-gradient(ellipse at 50% 30%,var(--rpg-chair-hi,#8f8a83) 0%,var(--rpg-chair-mid,#5a5651) 55%,var(--rpg-chair-lo,#2f2d2b) 100%);border:1.5px solid var(--rpg-chair-border,#1e1c1a);border-radius:50%/40%;box-shadow:0 3px 8px rgba(0,0,0,0.5),inset 0 -3px 6px rgba(0,0,0,0.35),inset 0 2px 3px rgba(255,255,255,0.35);transition:transform 200ms cubic-bezier(0.34,1.56,0.64,1),box-shadow 200ms ease,opacity 300ms ease}',
+    '.rpg-chair:hover{transform:translateY(-2px) scale(1.08);opacity:0.7}',
+    '.rpg-chair.rpg-chair-dragging{cursor:grabbing;z-index:2147483050;transition:none;transform:scale(1.15);opacity:0.8;box-shadow:0 6px 16px rgba(0,0,0,0.6),inset 0 -3px 6px rgba(0,0,0,0.35),inset 0 2px 3px rgba(255,255,255,0.35)}',
+    '.rpg-chair.rpg-chair-occupied{opacity:0.6;box-shadow:0 3px 8px rgba(0,0,0,0.5),inset 0 -3px 6px rgba(0,0,0,0.35),inset 0 2px 3px rgba(255,255,255,0.35),0 0 10px rgba(255,209,102,0.55)}',
+    '.rpg-chair.rpg-chair-moved:not(.rpg-chair-occupied):not(:hover){opacity:0.45}',
+    '.rpg-chair-reset{position:absolute;top:-7px;right:-7px;width:14px;height:14px;border-radius:50%;background:rgba(20,20,28,0.85);color:#f8f8f8;font-size:10px;font-weight:800;display:none;align-items:center;justify-content:center;cursor:pointer;border:1px solid rgba(255,255,255,0.4);box-shadow:0 1px 3px rgba(0,0,0,0.5);line-height:1;pointer-events:auto;padding:0;transition:transform 150ms ease,background 150ms ease}',
+    '.rpg-chair.rpg-chair-moved .rpg-chair-reset{display:flex}',
+    '.rpg-chair-reset:hover{transform:scale(1.25);background:#dc2626}',
+    '.rpg-chairs-reset-all{position:fixed;left:490px;bottom:14px;width:22px;height:22px;border-radius:50%;background:rgba(20,20,28,0.55);color:#ddd;font-size:12px;font-weight:800;display:flex;align-items:center;justify-content:center;cursor:pointer;border:1px solid rgba(255,255,255,0.25);box-shadow:0 2px 5px rgba(0,0,0,0.4);z-index:2147482855;opacity:0.5;padding:0;line-height:1;transition:opacity 200ms ease,transform 150ms ease,background 150ms ease}',
+    '.rpg-chairs-reset-all:hover{opacity:1;transform:scale(1.15);background:#dc2626;color:#fff}',
+    '.rpg-roam.rpg-seated{transition:none!important;z-index:2147483025;pointer-events:none}',
+    '.rpg-chair-hitbox{position:absolute;left:-8%;width:116%;top:-12px;height:34px;background:transparent;pointer-events:auto;cursor:grab}',
+    '.rpg-roam.rpg-seated img{animation:none}',
+    '.rpg-pet-top-grab{position:absolute;top:0;left:0;width:100%;height:60%;pointer-events:none;cursor:grab;z-index:2}',
+    '.rpg-roam.rpg-seated .rpg-pet-top-grab{pointer-events:auto}',
     '@keyframes rpgReleaseWalk{0%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-3px) rotate(4deg)}100%{transform:translateY(0) rotate(-4deg)}}',
   ].join('\n'));
 
@@ -1013,6 +1045,7 @@
         renderPanel();
         if (state.player.hideRoamers) removeAllRoamers();
         else respawnAllRoamers();
+        updateChairsVisibility();
       }
     });
     el.leftCol.appendChild(el.hidePetsBtn);
@@ -1145,6 +1178,67 @@
       root.style.removeProperty('--rpg-banner-img');
     }
     if (el.panel) el.panel.style.backgroundImage = '';
+    applyChairColorFromBanner();
+  };
+  // Beanbag chairs derive their color from the current banner's center pixel
+  // (muted toward neutral). Cached per banner id. Falls back to dark grey on
+  // canvas taint or missing image.
+  const chairColorCache = new Map();
+  const setChairGreyDefaults = () => {
+    document.documentElement.style.setProperty('--rpg-chair-hi', '#8a8a8a');
+    document.documentElement.style.setProperty('--rpg-chair-mid', '#6a6a6a');
+    document.documentElement.style.setProperty('--rpg-chair-lo', '#4a4a4a');
+    document.documentElement.style.setProperty('--rpg-chair-border', '#333333');
+  };
+  const applyChairColors = (mid_r, mid_g, mid_b) => {
+    // Mute: blend 40% toward a warm neutral (106,101,96).
+    const nr = Math.round(mid_r * 0.6 + 106 * 0.4);
+    const ng = Math.round(mid_g * 0.6 + 101 * 0.4);
+    const nb = Math.round(mid_b * 0.6 + 96  * 0.4);
+    const hi = 'rgb(' + Math.round(nr + (255 - nr) * 0.25) + ',' + Math.round(ng + (255 - ng) * 0.25) + ',' + Math.round(nb + (255 - nb) * 0.25) + ')';
+    const mid = 'rgb(' + nr + ',' + ng + ',' + nb + ')';
+    const lo = 'rgb(' + Math.round(nr * 0.5) + ',' + Math.round(ng * 0.5) + ',' + Math.round(nb * 0.5) + ')';
+    const bd = 'rgb(' + Math.round(nr * 0.3) + ',' + Math.round(ng * 0.3) + ',' + Math.round(nb * 0.3) + ')';
+    document.documentElement.style.setProperty('--rpg-chair-hi', hi);
+    document.documentElement.style.setProperty('--rpg-chair-mid', mid);
+    document.documentElement.style.setProperty('--rpg-chair-lo', lo);
+    document.documentElement.style.setProperty('--rpg-chair-border', bd);
+    return { hi, mid, lo, bd };
+  };
+  const applyChairColorFromBanner = () => {
+    const b = bannerById(state.equip.bannerId);
+    if (!b || !b.img) { setChairGreyDefaults(); return; }
+    const cached = chairColorCache.get(b.id);
+    if (cached) {
+      document.documentElement.style.setProperty('--rpg-chair-hi', cached.hi);
+      document.documentElement.style.setProperty('--rpg-chair-mid', cached.mid);
+      document.documentElement.style.setProperty('--rpg-chair-lo', cached.lo);
+      document.documentElement.style.setProperty('--rpg-chair-border', cached.bd);
+      return;
+    }
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 8; canvas.height = 8;
+        const ctx = canvas.getContext('2d');
+        const sx = Math.max(0, img.naturalWidth  / 2 - 4);
+        const sy = Math.max(0, img.naturalHeight / 2 - 4);
+        ctx.drawImage(img, sx, sy, 8, 8, 0, 0, 8, 8);
+        const data = ctx.getImageData(0, 0, 8, 8).data;
+        let r=0, g=0, bl=0, count=0;
+        for (let i=0; i<data.length; i+=4) { r+=data[i]; g+=data[i+1]; bl+=data[i+2]; count++; }
+        r/=count; g/=count; bl/=count;
+        const colors = applyChairColors(r, g, bl);
+        chairColorCache.set(b.id, colors);
+      } catch(e) {
+        setChairGreyDefaults();
+      }
+    };
+    img.onerror = () => { setChairGreyDefaults(); };
+    // Cache-bust so the sampling request doesn't reuse the CSS's tainted (non-CORS) response.
+    img.src = b.img + (b.img.indexOf('?') >= 0 ? '&' : '?') + 'rpgcors=1';
   };
   const renderPanel = () => {
     if (!el.panel) return;
@@ -1544,6 +1638,8 @@
             for (let s = 0; s < state.equip.petInstanceIds.length; s++) {
               if (state.equip.petInstanceIds[s] === inst.instanceId) state.equip.petInstanceIds[s] = null;
             }
+            // Clear any chair record for the released pet.
+            unseatPet(inst.instanceId);
             state.player.reservePets = state.player.reservePets || [];
             state.player.reservePets.push({ petId: p.id, variant: v });
             persistCollection(); persistEquip(); persistPlayer();
@@ -2014,7 +2110,10 @@
         cctx.vy -= impulse * ny;
         const newOtVx = otVx + impulse * nx;
         const newOtVy = otVy + impulse * ny;
+        // If the target is seated on a chair, knock them out of it — physics takes over.
         if (octx.state === 'idle') {
+          const targetIid = state.equip.petInstanceIds[j];
+          if (targetIid && chairIdForInstance(targetIid)) unseatPet(targetIid);
           startToss(j, newOtVx, newOtVy);
         } else if (octx.state === 'tossing') {
           octx.vx = newOtVx;
@@ -2071,7 +2170,20 @@
           const speed = Math.hypot(vx, vy);
           if (speed > TOSS_MIN_SPEED) { tossed = true; startToss(i, vx, vy); }
         }
-        if (!tossed) endGrab(i);
+        if (!tossed) {
+          // Slow drop: check if the pet was dropped near a chair to seat it.
+          const petRect = el.getBoundingClientRect();
+          const petCX = petRect.left + petRect.width / 2;
+          const petCY = petRect.top  + petRect.height / 2;
+          const chairId = findChairAtPoint(petCX, petCY);
+          const dropIid = state.equip.petInstanceIds[i];
+          if (chairId && dropIid) {
+            endGrab(i);
+            seatPet(chairId, dropIid);
+          } else {
+            endGrab(i);
+          }
+        }
       } else {
         // Click = poke: just play the squirm animation
         playPokeAnim(el);
@@ -2103,9 +2215,324 @@
       c.grabOffsetX = e.clientX - startL;
       c.grabOffsetY = e.clientY - startT;
       el.classList.add('rpg-grabbed');
+      // If the pet was on a chair, lift it off immediately so the grab is smooth.
+      const grabIid = state.equip.petInstanceIds[i];
+      if (grabIid && chairIdForInstance(grabIid)) unseatPet(grabIid);
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
     });
+  };
+
+  // ================================================================
+  // BEANBAG CHAIRS
+  // ================================================================
+  // 3 draggable beanbag pillows anchored to the bottom-left. Dropping a chair
+  // onto a pet (or a pet onto a chair) seats the pet at the chair's home spot.
+  // Seated pets skip the roam tick and the collision poll. State lives in
+  // state.player.seats — { chairId -> instanceId | null }.
+  const CHAIR_HOMES = [
+    { id: 'ch_a', left: 230 },
+    { id: 'ch_b', left: 324 },
+    { id: 'ch_c', left: 418 },
+  ];
+  const CHAIR_BOTTOM       = 14;   // px from viewport bottom
+  const CHAIR_WIDTH        = 64;
+  const CHAIR_HEIGHT       = 22;
+  const CHAIR_SNAP_RADIUS  = 60;   // px from chair center where a drop counts
+
+  const chairEls = {};
+
+  const chairIdForInstance = (iid) => {
+    if (!iid || !state.player.seats) return null;
+    for (const c of CHAIR_HOMES) {
+      if (state.player.seats[c.id] === iid) return c.id;
+    }
+    return null;
+  };
+  const isRoamerSeated = (i) => {
+    const iid = state.equip.petInstanceIds[i];
+    return iid ? chairIdForInstance(iid) : null;
+  };
+  // Live center of a chair (uses its current DOM position, so it works whether
+  // the chair is at its home slot or has been dragged elsewhere).
+  const chairCenter = (chairId) => {
+    const chairEl = chairEls[chairId];
+    if (chairEl) {
+      const r = chairEl.getBoundingClientRect();
+      if (r.width) return { cx: r.left + r.width / 2, cy: r.top + r.height / 2, top: r.top };
+    }
+    const c = CHAIR_HOMES.find(x => x.id === chairId);
+    if (!c) return null;
+    const cy = window.innerHeight - CHAIR_BOTTOM - CHAIR_HEIGHT / 2;
+    return { cx: c.left + CHAIR_WIDTH / 2, cy, top: window.innerHeight - CHAIR_BOTTOM - CHAIR_HEIGHT };
+  };
+  const findChairAtPoint = (x, y) => {
+    for (const c of CHAIR_HOMES) {
+      const center = chairCenter(c.id);
+      if (!center) continue;
+      const dx = x - center.cx, dy = y - center.cy;
+      if (dx * dx + dy * dy <= CHAIR_SNAP_RADIUS * CHAIR_SNAP_RADIUS) return c.id;
+    }
+    return null;
+  };
+  const positionRoamerOnChair = (i, chairId) => {
+    const el = roamers[i]; if (!el) return;
+    const center = chairCenter(chairId); if (!center) return;
+    const pr = el.getBoundingClientRect();
+    const pw = pr.width  || 44, ph = pr.height || 60;
+    // Horizontally center on chair; sit so ~80% of pet div is above the chair top.
+    el.style.left = Math.max(4, Math.floor(center.cx - pw / 2)) + 'px';
+    el.style.top  = Math.floor(center.top - ph * 0.80) + 'px';
+    // Give layout a tick to catch up, then resize the chair hitbox to cover the
+    // lower half of the combined pet+chair zone.
+    requestAnimationFrame(() => resizeChairHitbox(chairId));
+  };
+  // Resize the chair's invisible hit area based on whoever's sitting on it:
+  //   - No pet: chair-size + small vertical extension (easy grab).
+  //   - Seated pet: covers the LOWER half of the combined pet+chair bounding
+  //     zone, so pet torso/head stays grabbable via its own top-grab overlay.
+  const resizeChairHitbox = (chairId) => {
+    const chairEl = chairEls[chairId]; if (!chairEl) return;
+    const hitbox = chairEl.querySelector('.rpg-chair-hitbox'); if (!hitbox) return;
+    const seatedIid = state.player.seats && state.player.seats[chairId];
+    if (!seatedIid) {
+      hitbox.style.top    = '-12px';
+      hitbox.style.height = '34px';
+      return;
+    }
+    const idx = state.equip.petInstanceIds.indexOf(seatedIid);
+    const petEl = idx >= 0 ? roamers[idx] : null;
+    if (!petEl) return;
+    const petRect   = petEl.getBoundingClientRect();
+    const chairRect = chairEl.getBoundingClientRect();
+    if (!petRect.height || !chairRect.height) return;
+    const topY = Math.min(petRect.top, chairRect.top);
+    const botY = Math.max(petRect.bottom, chairRect.bottom);
+    const mid  = (topY + botY) / 2;
+    hitbox.style.top    = (mid - chairRect.top) + 'px';
+    hitbox.style.height = (botY - mid) + 'px';
+  };
+  const updateChairVisuals = () => {
+    for (const c of CHAIR_HOMES) {
+      const el = chairEls[c.id]; if (!el) continue;
+      const occupied = !!(state.player.seats && state.player.seats[c.id]);
+      el.classList.toggle('rpg-chair-occupied', occupied);
+    }
+  };
+  let resetAllBtn = null;
+  const updateChairsVisibility = () => {
+    const hidden = !!state.player.hideRoamers;
+    for (const c of CHAIR_HOMES) {
+      const el = chairEls[c.id]; if (!el) continue;
+      el.style.display = hidden ? 'none' : '';
+    }
+    if (resetAllBtn) resetAllBtn.style.display = hidden ? 'none' : '';
+  };
+  const resetAllChairsToHome = () => {
+    for (const c of CHAIR_HOMES) {
+      const el = chairEls[c.id]; if (!el) continue;
+      resetChairToHome(el, c.id);
+    }
+  };
+  const seatPet = (chairId, iid) => {
+    if (!chairId || !iid) return;
+    const i = state.equip.petInstanceIds.indexOf(iid);
+    if (i < 0 || !roamers[i]) return;
+    if (rmCtx(i).state !== 'idle') return; // skip mid-grab/toss
+    // Clear any existing seat for this pet (moving between chairs).
+    for (const c of CHAIR_HOMES) {
+      if (state.player.seats[c.id] === iid) state.player.seats[c.id] = null;
+    }
+    // Displace whoever was in the target chair (they resume roaming).
+    const prev = state.player.seats[chairId];
+    if (prev && prev !== iid) {
+      const prevIdx = state.equip.petInstanceIds.indexOf(prev);
+      if (prevIdx >= 0 && roamers[prevIdx]) {
+        roamers[prevIdx].classList.remove('rpg-seated');
+        setTimeout(() => { if (roamers[prevIdx] && rmCtx(prevIdx).state === 'idle') moveRoamerAt(prevIdx); }, 40);
+      }
+    }
+    state.player.seats[chairId] = iid;
+    persistPlayer();
+    roamers[i].classList.add('rpg-seated');
+    positionRoamerOnChair(i, chairId);
+    updateChairVisuals();
+  };
+  const unseatPet = (iid) => {
+    if (!iid || !state.player.seats) return;
+    let changed = false;
+    const clearedChairs = [];
+    for (const c of CHAIR_HOMES) {
+      if (state.player.seats[c.id] === iid) {
+        state.player.seats[c.id] = null;
+        clearedChairs.push(c.id);
+        changed = true;
+      }
+    }
+    if (!changed) return;
+    persistPlayer();
+    const i = state.equip.petInstanceIds.indexOf(iid);
+    if (i >= 0 && roamers[i]) roamers[i].classList.remove('rpg-seated');
+    updateChairVisuals();
+    for (const chairId of clearedChairs) resizeChairHitbox(chairId);
+  };
+  const resetChairToHome = (chairEl, chairId) => {
+    const home = CHAIR_HOMES.find(c => c.id === chairId);
+    if (!home) return;
+    chairEl.style.left   = home.left + 'px';
+    chairEl.style.top    = 'auto';
+    chairEl.style.bottom = CHAIR_BOTTOM + 'px';
+    chairEl.classList.remove('rpg-chair-moved');
+    if (state.player.chairs) { state.player.chairs[chairId] = null; persistPlayer(); }
+    // If a pet is on this chair, re-seat it at the home position.
+    const seatedIid = state.player.seats && state.player.seats[chairId];
+    if (seatedIid) {
+      const idx = state.equip.petInstanceIds.indexOf(seatedIid);
+      if (idx >= 0) requestAnimationFrame(() => positionRoamerOnChair(idx, chairId));
+    }
+  };
+  const attachChairDrag = (chairEl, chairId) => {
+    let dragging = false;
+    let carriedIid = null;      // pet being carried along with the chair (null if none)
+    let moved = false;           // did the mouse move past the click threshold?
+    let downX = 0, downY = 0;
+    const CLICK_THRESHOLD = 4;   // px of movement below which we treat this as a click, not a drag
+    // Position a carried pet on the chair given the mouse position.
+    // (Mouse is at the chair's center during a drag.)
+    const positionCarriedPet = (mouseX, mouseY) => {
+      if (!carriedIid) return;
+      const idx = state.equip.petInstanceIds.indexOf(carriedIid);
+      const roamEl = idx >= 0 ? roamers[idx] : null;
+      if (!roamEl) return;
+      const pr = roamEl.getBoundingClientRect();
+      const pw = pr.width  || 44;
+      const ph = pr.height || 60;
+      // Chair top = mouseY - CHAIR_HEIGHT/2. Pet's top sits at chairTop - ph*0.80.
+      roamEl.style.left = Math.max(4, Math.floor(mouseX - pw / 2)) + 'px';
+      roamEl.style.top  = Math.floor(mouseY - CHAIR_HEIGHT / 2 - ph * 0.80) + 'px';
+    };
+    const onMove = (e) => {
+      if (!dragging) return;
+      if (!moved) {
+        const dx = e.clientX - downX;
+        const dy = e.clientY - downY;
+        if (Math.hypot(dx, dy) > CLICK_THRESHOLD) moved = true;
+      }
+      chairEl.style.left   = (e.clientX - CHAIR_WIDTH  / 2) + 'px';
+      chairEl.style.top    = (e.clientY - CHAIR_HEIGHT / 2) + 'px';
+      chairEl.style.bottom = 'auto';
+      positionCarriedPet(e.clientX, e.clientY);
+    };
+    const onUp = (e) => {
+      if (!dragging) return;
+      dragging = false;
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      chairEl.classList.remove('rpg-chair-dragging');
+      // Click (no meaningful drag): eject seated pet if any and stop.
+      if (!moved) {
+        if (carriedIid) unseatPet(carriedIid);
+        carriedIid = null;
+        return;
+      }
+      // Find pet under drop point (temporarily hide chair from hit test).
+      const prevPE = chairEl.style.pointerEvents;
+      chairEl.style.pointerEvents = 'none';
+      const under = document.elementFromPoint(e.clientX, e.clientY);
+      chairEl.style.pointerEvents = prevPE || '';
+      let seatedNewIid = null;
+      if (under) {
+        const roamEl = under.closest && under.closest('.rpg-roam');
+        if (roamEl) {
+          const idx = roamers.indexOf(roamEl);
+          if (idx >= 0) {
+            const iid = state.equip.petInstanceIds[idx];
+            if (iid && iid !== carriedIid) { seatPet(chairId, iid); seatedNewIid = iid; }
+          }
+        }
+      }
+      // If we didn't seat a new pet AND we were carrying one, snap the carry to
+      // the chair's final position (handles the case where our approximate
+      // updates during onMove diverged from the true chair rect).
+      if (!seatedNewIid && carriedIid) {
+        const idx = state.equip.petInstanceIds.indexOf(carriedIid);
+        if (idx >= 0) requestAnimationFrame(() => positionRoamerOnChair(idx, chairId));
+      }
+      carriedIid = null;
+      // Chair stays where it was dropped. Persist position + mark as moved
+      // so the reset icon appears.
+      const left = parseInt(chairEl.style.left, 10);
+      const top  = parseInt(chairEl.style.top,  10);
+      const home = CHAIR_HOMES.find(c => c.id === chairId);
+      const isAtHome = home && left === home.left && chairEl.style.bottom !== 'auto';
+      if (!isAtHome && !isNaN(left) && !isNaN(top)) {
+        if (state.player.chairs) state.player.chairs[chairId] = { left, top };
+        persistPlayer();
+        chairEl.classList.add('rpg-chair-moved');
+      }
+    };
+    chairEl.addEventListener('mousedown', (e) => {
+      // If click landed on the reset icon, let its own handler run.
+      if (e.target && e.target.classList && e.target.classList.contains('rpg-chair-reset')) return;
+      if (e.button !== 0) return;
+      e.preventDefault();
+      // Capture whoever is sitting in the chair — they'll come along on drag,
+      // or be ejected if this ends up being a click (no significant movement).
+      carriedIid = (state.player.seats && state.player.seats[chairId]) || null;
+      dragging = true;
+      moved = false;
+      downX = e.clientX;
+      downY = e.clientY;
+      chairEl.classList.add('rpg-chair-dragging');
+      // Pin current position at cursor immediately (avoids jump on first move).
+      chairEl.style.left   = (e.clientX - CHAIR_WIDTH  / 2) + 'px';
+      chairEl.style.top    = (e.clientY - CHAIR_HEIGHT / 2) + 'px';
+      chairEl.style.bottom = 'auto';
+      positionCarriedPet(e.clientX, e.clientY);
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  };
+  const setupChairs = () => {
+    for (const c of CHAIR_HOMES) {
+      const el = $('div', { class: 'rpg-chair', title: 'Beanbag chair — drop a pet on it to seat' });
+      const stored = state.player.chairs && state.player.chairs[c.id];
+      if (stored && Number.isFinite(stored.left) && Number.isFinite(stored.top)) {
+        el.style.left   = stored.left + 'px';
+        el.style.top    = stored.top  + 'px';
+        el.style.bottom = 'auto';
+        el.classList.add('rpg-chair-moved');
+      } else {
+        el.style.left = c.left + 'px';
+      }
+      // Invisible hit area extending above the chair so it's easy to grab
+      // even when a pet is sitting on it (seated pets are pointer-events:none
+      // so clicks in this zone reach the chair).
+      const hitbox = $('div', { class: 'rpg-chair-hitbox' });
+      el.appendChild(hitbox);
+      // Reset icon (visible only when chair is not at home).
+      const resetBtn = $('button', { class: 'rpg-chair-reset', title: 'Reset chair to original position', html: '\u21ba' });
+      resetBtn.addEventListener('mousedown', (ev) => { ev.stopPropagation(); });
+      resetBtn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        ev.preventDefault();
+        resetChairToHome(el, c.id);
+      });
+      el.appendChild(resetBtn);
+      document.body.appendChild(el);
+      chairEls[c.id] = el;
+      attachChairDrag(el, c.id);
+    }
+    // Global "reset all chairs" button — always visible near the chair cluster.
+    resetAllBtn = $('button', { class: 'rpg-chairs-reset-all', title: 'Reset all chairs to their original positions', html: '\u21ba' });
+    resetAllBtn.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      ev.preventDefault();
+      resetAllChairsToHome();
+    });
+    document.body.appendChild(resetAllBtn);
+    updateChairVisuals();
+    updateChairsVisibility();
   };
 
   // ================================================================
@@ -2117,6 +2544,7 @@
   const moveRoamerAt = (i) => {
     const r = roamers[i]; if (!r) return;
     if (rmCtx(i).state !== 'idle') return; // don't fight grab/toss
+    if (isRoamerSeated(i)) return; // seated pets don't drift
     const curX = parseFloat(r.style.left) || 0;
     const curY = parseFloat(r.style.top) || 0;
     const t = pickQuadrantPoint(80, 80, curX, curY, 200);
@@ -2141,6 +2569,10 @@
     roamPetBox.style.setProperty('--rpg-pet-mask', 'url("' + roamImgUrl + '")');
     roamPetBox.appendChild($('img', { src: roamImgUrl }));
     el.appendChild(roamPetBox);
+    // Overlay covering the top ~60% of the pet div. When seated (pet is pointer-events:none),
+    // this overlay flips to pointer-events:auto so the pet's torso/head area still triggers
+    // a grab. Below the overlay, clicks pass through to the chair hitbox.
+    el.appendChild($('div', { class: 'rpg-pet-top-grab' }));
     el.style.setProperty('--rpg-scale', String(rarityScale(p.rarity)));
     const initPos = pickQuadrantPoint(80, 80, -9999, -9999, 0);
     el.style.left = Math.floor(initPos.x) + 'px';
@@ -2149,7 +2581,14 @@
     roamers[i] = el;
     roamerCtx[i] = { state: 'idle', grabbedAt: 0, moveHistory: [] };
     attachGrab(el, i);
-    requestAnimationFrame(() => requestAnimationFrame(() => moveRoamerAt(i)));
+    // If this pet is remembered as seated, apply the chair before the first drift kick.
+    const seatedChairId = isRoamerSeated(i);
+    if (seatedChairId) {
+      el.classList.add('rpg-seated');
+      requestAnimationFrame(() => requestAnimationFrame(() => positionRoamerOnChair(i, seatedChairId)));
+    } else {
+      requestAnimationFrame(() => requestAnimationFrame(() => moveRoamerAt(i)));
+    }
   };
   const respawnAllRoamers = () => {
     removeAllRoamers();
@@ -2186,12 +2625,12 @@
     // 0- or 1-pet case (early levels, dragging, empty slots).
     let idleCount = 0;
     for (let i = 0; i < roamers.length; i++) {
-      if (roamers[i] && rmCtx(i).state === 'idle') idleCount++;
+      if (roamers[i] && rmCtx(i).state === 'idle' && !isRoamerSeated(i)) idleCount++;
     }
     if (idleCount < 2) return;
     const idleEls = [];
     for (let i = 0; i < roamers.length; i++) {
-      if (roamers[i] && rmCtx(i).state === 'idle') idleEls.push(roamers[i]);
+      if (roamers[i] && rmCtx(i).state === 'idle' && !isRoamerSeated(i)) idleEls.push(roamers[i]);
     }
     for (let a = 0; a < idleEls.length; a++) {
       const ra = idleEls[a].getBoundingClientRect();
@@ -2434,6 +2873,7 @@
     bumpInstalledVersion();
     loadUpdateCache();
     buildPanel(); renderPanel();
+    setupChairs();
     respawnAllRoamers();
     // Roll a wild spawn shortly after load
     setTimeout(rollWildSpawn, 1500);
