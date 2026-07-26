@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      1.5.1
+// @version      1.5.2
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @icon         https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/icon.png
@@ -2332,9 +2332,10 @@
       const el = chairEls[c.id]; if (!el) continue;
       const visible = !hidden && i < nSlots;
       el.style.display = visible ? '' : 'none';
-      // If this chair is now hidden but still holds a pet, un-seat it — the
-      // slot no longer exists to keep track of that pet.
-      if (!visible && state.player.seats && state.player.seats[c.id]) {
+      // If this chair belongs to a slot that no longer exists (beyond
+      // unlockedSlotCount), un-seat its occupant. Hiding via the Hide Pets
+      // toggle should NOT clear seats — the pets are just temporarily off-screen.
+      if (i >= nSlots && state.player.seats && state.player.seats[c.id]) {
         toUnseat.push(state.player.seats[c.id]);
       }
     }
