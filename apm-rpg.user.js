@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      1.5.2
+// @version      1.5.3
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @icon         https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/icon.png
@@ -355,6 +355,7 @@
         if (parsed == null) return;
         if (name === K.player) {
           state.player = parsed;
+          if (typeof syncChairsAndSeats === 'function') syncChairsAndSeats();
         } else if (name === K.collection) {
           state.collection = parsed;
         } else if (name === K.equip) {
@@ -2367,6 +2368,49 @@
       const el = chairEls[c.id]; if (!el) continue;
       resetChairToHome(el, c.id);
     }
+  };
+  // Multi-tab sync helper: reconcile chair positions and seated-pet state with
+  // the current state.player.chairs / state.player.seats. Called from the
+  // K.player remote listener so seat and chair moves in other tabs land here.
+  const syncChairsAndSeats = () => {
+    // 1. Chair positions.
+    for (const c of CHAIR_HOMES) {
+      const el = chairEls[c.id]; if (!el) continue;
+      const stored = state.player.chairs && state.player.chairs[c.id];
+      if (stored && Number.isFinite(stored.left) && Number.isFinite(stored.top)) {
+        el.style.left   = stored.left + 'px';
+        el.style.top    = stored.top  + 'px';
+        el.style.bottom = 'auto';
+        el.classList.add('rpg-chair-moved');
+      } else {
+        el.style.left   = c.left + 'px';
+        el.style.top    = 'auto';
+        el.style.bottom = CHAIR_BOTTOM + 'px';
+        el.classList.remove('rpg-chair-moved');
+      }
+    }
+    // 2. Roamer seat state.
+    if (roamers && roamers.length) {
+      for (let i = 0; i < roamers.length; i++) {
+        const el = roamers[i]; if (!el) continue;
+        const iid = state.equip.petInstanceIds[i];
+        const chairId = iid ? chairIdForInstance(iid) : null;
+        const wasSeated = el.classList.contains('rpg-seated');
+        if (chairId && !wasSeated) {
+          el.classList.add('rpg-seated');
+          requestAnimationFrame(() => positionRoamerOnChair(i, chairId));
+        } else if (!chairId && wasSeated) {
+          el.classList.remove('rpg-seated');
+          // Kick a fresh drift target so it doesn't sit stuck at the old chair spot.
+          setTimeout(() => { if (roamers[i] && rmCtx(i).state === 'idle') moveRoamerAt(i); }, 60);
+        } else if (chairId && wasSeated) {
+          // Both agree — but the chair may have moved. Re-snap.
+          requestAnimationFrame(() => positionRoamerOnChair(i, chairId));
+        }
+      }
+    }
+    updateChairVisuals();
+    updateChairsVisibility();
   };
   const seatPet = (chairId, iid) => {
     if (!chairId || !iid) return;
