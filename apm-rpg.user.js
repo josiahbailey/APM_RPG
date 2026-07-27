@@ -1153,7 +1153,7 @@
       onclick: (e) => {
         if (e && e.preventDefault) e.preventDefault();
         if (e && e.stopPropagation) e.stopPropagation();
-        window.open('https://amzn-wwc.slack.com/archives/C0BKW2YBFQA', '_blank', 'noopener');
+        window.location.href = 'slack://channel?team=E015GUGD2V6&id=C0BKW2YBFQA';
       }
     });
     root.appendChild(el.slackBtn);
