@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      1.5.3
+// @version      1.5.4
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @icon         https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/icon.png
@@ -822,6 +822,7 @@
     '.rpg-version{font-size:9px;color:rgba(255,209,102,0.5);text-align:center;letter-spacing:0.5px;font-weight:600;user-select:text;margin-top:auto;text-shadow:0 1px 1px rgba(0,0,0,0.5)}',
     '.rpg-reset-btn{position:fixed;left:12px;bottom:12px;z-index:2147483000;font-size:9px;padding:3px 7px;background:rgba(40,0,0,0.8);color:#f77;border:1px solid #633;border-radius:4px;cursor:pointer;opacity:0.5}.rpg-reset-btn:hover{opacity:1;background:#400}',
     '.rpg-help-btn{position:fixed;left:60px;bottom:12px;z-index:2147483000;font-size:9px;padding:3px 7px;background:rgba(40,30,0,0.8);color:#fd7;border:1px solid #663;border-radius:4px;cursor:pointer;opacity:0.5}.rpg-help-btn:hover{opacity:1;background:#420}',
+    '.rpg-slack-btn{position:fixed;left:135px;bottom:12px;z-index:2147483000;font-size:9px;padding:3px 7px;background:rgba(74,21,75,0.8);color:#ecb22e;border:1px solid #b48a20;border-radius:4px;cursor:pointer;opacity:0.5}.rpg-slack-btn:hover{opacity:1;background:#611f69}',
     '.rpg-update-toast{position:fixed;right:16px;bottom:120px;z-index:2147483001;padding:4px 10px;font-size:10px;font-weight:800;letter-spacing:0.4px;border-radius:6px;cursor:pointer;background:linear-gradient(135deg,#22c55e,#15803d);color:#fff;border:1px solid #16a34a;box-shadow:0 2px 8px rgba(34,197,94,0.35);animation:rpgUpdatePulse 2s ease-in-out infinite;transition:transform 0.15s ease}.rpg-update-toast:hover{filter:brightness(1.15);transform:translateY(-1px)}.rpg-update-toast:active{transform:translateY(0)}',
     '@keyframes rpgUpdatePulse{0%,100%{box-shadow:0 2px 8px rgba(34,197,94,0.35)}50%{box-shadow:0 2px 10px rgba(34,197,94,0.7),0 0 0 4px rgba(34,197,94,0.12)}}',
     '.rpg-menu{position:fixed;right:16px;bottom:110px;z-index:2147483001;background:rgba(20,20,28,0.97);border:1px solid #3b3b48;border-radius:12px;padding:12px;color:#eee;max-width:380px;max-height:60vh;overflow-y:auto;box-shadow:0 10px 30px rgba(0,0,0,0.6)}',
@@ -1021,6 +1022,15 @@
     '.rpg-chair-hitbox{position:absolute;left:-8%;width:116%;top:-12px;height:34px;background:transparent;pointer-events:auto;cursor:grab}',
     '.rpg-roam.rpg-seated img{animation:none}',
     '.rpg-pet-top-grab{position:absolute;top:0;left:0;width:100%;height:60%;pointer-events:none;cursor:grab;z-index:2}',
+    '@keyframes rpgSeatedFidget{0%,100%{transform:translateY(0) rotate(0deg)}20%{transform:translateY(-1px) rotate(-1.5deg)}40%{transform:translateY(-2px) rotate(0deg)}60%{transform:translateY(-1px) rotate(1.5deg)}80%{transform:translateY(0) rotate(-0.5deg)}}',
+    '.rpg-roam.rpg-seated .rpg-pet-sprite{animation:rpgSeatedFidget 3.6s ease-in-out infinite;transform-origin:center bottom}',
+    '@keyframes rpgChairSaucer{0%,100%{box-shadow:0 3px 8px rgba(0,0,0,0.5),inset 0 -3px 6px rgba(0,0,0,0.35),inset 0 2px 3px rgba(255,255,255,0.35),0 0 10px rgba(255,209,102,0.55)}50%{box-shadow:0 6px 14px rgba(0,0,0,0.5),inset 0 -3px 6px rgba(0,0,0,0.35),inset 0 2px 3px rgba(255,255,255,0.4),0 0 22px rgba(255,209,102,0.9)}}',
+    '.rpg-chair.rpg-chair-occupied{animation:rpgChairSaucer 2.4s ease-in-out infinite}',
+    '@keyframes rpgSaucerSpin{0%{transform:rotateY(0deg)}100%{transform:rotateY(360deg)}}',
+    '.rpg-roam.rpg-seated.rpg-spinning{perspective:600px}',
+    '.rpg-roam.rpg-seated.rpg-spinning .rpg-pet-sprite{animation:rpgSaucerSpin 1.4s cubic-bezier(0.22,0.9,0.36,1);transform-origin:center center;transform-style:preserve-3d}',
+    '@keyframes rpgChairShake{0%,100%{transform:translateX(0)}10%,30%,50%,70%,90%{transform:translateX(-2px)}20%,40%,60%,80%{transform:translateX(2px)}}',
+    '.rpg-chair.rpg-chair-occupied.rpg-chair-spinning{animation:rpgChairSaucer 2.4s ease-in-out infinite,rpgChairShake 1.4s ease-in-out}',
     '.rpg-roam.rpg-seated .rpg-pet-top-grab{pointer-events:auto}',
     '@keyframes rpgReleaseWalk{0%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-3px) rotate(4deg)}100%{transform:translateY(0) rotate(-4deg)}}',
   ].join('\n'));
@@ -1135,6 +1145,18 @@
       }
     });
     root.appendChild(el.helpBtn);
+    el.slackBtn = $('button', {
+      class: 'rpg-slack-btn',
+      type: 'button',
+      html: 'Slack',
+      title: 'Open the community Slack channel',
+      onclick: (e) => {
+        if (e && e.preventDefault) e.preventDefault();
+        if (e && e.stopPropagation) e.stopPropagation();
+        window.open('https://amzn-wwc.slack.com/archives/C0BKW2YBFQA', '_blank', 'noopener');
+      }
+    });
+    root.appendChild(el.slackBtn);
   };
 
   const updateSlots = () => {
@@ -2412,6 +2434,31 @@
     updateChairVisuals();
     updateChairsVisibility();
   };
+  // Random 5-10 minute spin per chair — visual only, per-tab (not synced).
+  const CHAIR_SPIN_MIN_MS = 5 * 60 * 1000;
+  const CHAIR_SPIN_MAX_MS = 10 * 60 * 1000;
+  const CHAIR_SPIN_DURATION_MS = 1400;
+  const scheduleChairSpin = (chairId) => {
+    const delay = CHAIR_SPIN_MIN_MS + Math.random() * (CHAIR_SPIN_MAX_MS - CHAIR_SPIN_MIN_MS);
+    setTimeout(() => tryChairSpin(chairId), delay);
+  };
+  const tryChairSpin = (chairId) => {
+    const seatedIid = state.player.seats && state.player.seats[chairId];
+    if (seatedIid) {
+      const idx = state.equip.petInstanceIds.indexOf(seatedIid);
+      const el = idx >= 0 ? roamers[idx] : null;
+      const chairEl = chairEls[chairId];
+      if (el && el.classList.contains('rpg-seated')) {
+        el.classList.add('rpg-spinning');
+        if (chairEl) chairEl.classList.add('rpg-chair-spinning');
+        setTimeout(() => {
+          if (el) el.classList.remove('rpg-spinning');
+          if (chairEl) chairEl.classList.remove('rpg-chair-spinning');
+        }, CHAIR_SPIN_DURATION_MS);
+      }
+    }
+    scheduleChairSpin(chairId);
+  };
   const seatPet = (chairId, iid) => {
     if (!chairId || !iid) return;
     const i = state.equip.petInstanceIds.indexOf(iid);
@@ -2611,6 +2658,7 @@
     document.body.appendChild(resetAllBtn);
     updateChairVisuals();
     updateChairsVisibility();
+    for (const c of CHAIR_HOMES) scheduleChairSpin(c.id);
   };
 
   // ================================================================
