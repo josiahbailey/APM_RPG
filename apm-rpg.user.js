@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      1.5.4
+// @version      1.6.0
 // @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
 // @author       baijosis
 // @icon         https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/icon.png
@@ -820,9 +820,14 @@
     '.rpg-btn{padding:4px 8px;font-size:10px;font-weight:700;border:1px solid #555;border-radius:5px;background:#2a2a36;color:#ffd166;cursor:pointer}.rpg-btn:hover{background:#3b3b48}',
     '.rpg-right-col{display:none}',
     '.rpg-version{font-size:9px;color:rgba(255,209,102,0.5);text-align:center;letter-spacing:0.5px;font-weight:600;user-select:text;margin-top:auto;text-shadow:0 1px 1px rgba(0,0,0,0.5)}',
-    '.rpg-reset-btn{position:fixed;left:12px;bottom:12px;z-index:2147483000;font-size:9px;padding:3px 7px;background:rgba(40,0,0,0.8);color:#f77;border:1px solid #633;border-radius:4px;cursor:pointer;opacity:0.5}.rpg-reset-btn:hover{opacity:1;background:#400}',
-    '.rpg-help-btn{position:fixed;left:60px;bottom:12px;z-index:2147483000;font-size:9px;padding:3px 7px;background:rgba(40,30,0,0.8);color:#fd7;border:1px solid #663;border-radius:4px;cursor:pointer;opacity:0.5}.rpg-help-btn:hover{opacity:1;background:#420}',
-    '.rpg-slack-btn{position:fixed;left:135px;bottom:12px;z-index:2147483000;font-size:9px;padding:3px 7px;background:rgba(74,21,75,0.8);color:#ecb22e;border:1px solid #b48a20;border-radius:4px;cursor:pointer;opacity:0.5}.rpg-slack-btn:hover{opacity:1;background:#611f69}',
+    '.rpg-reset-btn{font-size:9px;padding:3px 7px;background:rgba(40,0,0,0.8);color:#f77;border:1px solid #633;border-radius:4px;cursor:pointer;opacity:0.7}.rpg-reset-btn:hover{opacity:1;background:#400}',
+    '.rpg-help-btn{font-size:9px;padding:3px 7px;background:rgba(40,30,0,0.8);color:#fd7;border:1px solid #663;border-radius:4px;cursor:pointer;opacity:0.7}.rpg-help-btn:hover{opacity:1;background:#420}',
+    '.rpg-slack-btn{font-size:9px;padding:3px 7px;background:rgba(74,21,75,0.8);color:#ecb22e;border:1px solid #b48a20;border-radius:4px;cursor:pointer;opacity:0.7}.rpg-slack-btn:hover{opacity:1;background:#611f69}',
+    '.rpg-corner-wrap{position:fixed;left:0;bottom:12px;z-index:2147483000;display:flex;align-items:stretch;transition:transform 320ms cubic-bezier(0.4,0,0.2,1)}',
+    '.rpg-corner-wrap.rpg-collapsed{transform:translateX(calc(-100% + 18px))}',
+    '.rpg-corner-tools{display:flex;gap:5px;padding:4px 8px;align-items:center;background:rgba(20,20,28,0.4);border:1px solid #3b3b48;border-left:none;border-radius:0 8px 8px 0;backdrop-filter:blur(2px)}',
+    '.rpg-corner-tab{width:18px;align-self:stretch;margin-left:-6px;padding:6px 2px;background:rgba(20,20,28,0.4);color:#b8a06a;border:1px solid #3b3b48;border-left:none;border-radius:0 8px 8px 0;cursor:pointer;writing-mode:vertical-rl;text-orientation:mixed;display:flex;align-items:center;justify-content:center;font-weight:700;letter-spacing:1.5px;font-size:5.5px;user-select:none;transition:background 150ms,color 150ms;backdrop-filter:blur(2px);box-shadow:3px 0 8px rgba(0,0,0,0.3)}',
+    '.rpg-corner-tab:hover{background:rgba(20,20,28,0.8);color:#e8d4a0}',
     '.rpg-update-toast{position:fixed;right:16px;bottom:120px;z-index:2147483001;padding:4px 10px;font-size:10px;font-weight:800;letter-spacing:0.4px;border-radius:6px;cursor:pointer;background:linear-gradient(135deg,#22c55e,#15803d);color:#fff;border:1px solid #16a34a;box-shadow:0 2px 8px rgba(34,197,94,0.35);animation:rpgUpdatePulse 2s ease-in-out infinite;transition:transform 0.15s ease}.rpg-update-toast:hover{filter:brightness(1.15);transform:translateY(-1px)}.rpg-update-toast:active{transform:translateY(0)}',
     '@keyframes rpgUpdatePulse{0%,100%{box-shadow:0 2px 8px rgba(34,197,94,0.35)}50%{box-shadow:0 2px 10px rgba(34,197,94,0.7),0 0 0 4px rgba(34,197,94,0.12)}}',
     '.rpg-menu{position:fixed;right:16px;bottom:110px;z-index:2147483001;background:rgba(20,20,28,0.97);border:1px solid #3b3b48;border-radius:12px;padding:12px;color:#eee;max-width:380px;max-height:60vh;overflow-y:auto;box-shadow:0 10px 30px rgba(0,0,0,0.6)}',
@@ -1132,7 +1137,6 @@
         safeReload();
       }
     });
-    root.appendChild(el.resetBtn);
     el.helpBtn = $('button', {
       class: 'rpg-help-btn',
       type: 'button',
@@ -1144,7 +1148,6 @@
         showHowToModal();
       }
     });
-    root.appendChild(el.helpBtn);
     el.slackBtn = $('button', {
       class: 'rpg-slack-btn',
       type: 'button',
@@ -1156,7 +1159,28 @@
         window.location.href = 'slack://channel?team=E015GUGD2V6&id=C0BKW2YBFQA';
       }
     });
-    root.appendChild(el.slackBtn);
+    // Collapsible corner tools tray — groups Reset / How to Play / Slack, with a
+    // vertical tab on the right that collapses the tray behind the tab edge.
+    el.cornerWrap = $('div', {
+      class: 'rpg-corner-wrap' + (state.player.toolsCollapsed ? ' rpg-collapsed' : ''),
+    });
+    el.cornerTools = $('div', { class: 'rpg-corner-tools' });
+    el.cornerTools.appendChild(el.resetBtn);
+    el.cornerTools.appendChild(el.helpBtn);
+    el.cornerTools.appendChild(el.slackBtn);
+    el.cornerWrap.appendChild(el.cornerTools);
+    el.cornerTab = $('div', {
+      class: 'rpg-corner-tab',
+      html: 'TOOLS',
+      title: 'Show/hide tools',
+      onclick: () => {
+        state.player.toolsCollapsed = !state.player.toolsCollapsed;
+        persistPlayer();
+        el.cornerWrap.classList.toggle('rpg-collapsed', !!state.player.toolsCollapsed);
+      }
+    });
+    el.cornerWrap.appendChild(el.cornerTab);
+    root.appendChild(el.cornerWrap);
   };
 
   const updateSlots = () => {
@@ -1883,7 +1907,24 @@
   // (15%), throttled by NAV_COOLDOWN_MS.
   // ================================================================
   const cooldown = { nav: 0 };
-  const canFire = (k, ms) => { const now = Date.now(); if (now - cooldown[k] < ms) return false; cooldown[k] = now; return true; };
+  // canFire: local + cross-instance cooldown. The local (in-memory) portion
+  // prevents rapid re-fires within one script instance. The cross-instance
+  // portion is stored as a data-attribute on document.documentElement, which
+  // is shared by every userscript sandbox on this page — GM storage is
+  // isolated per install, but the DOM is not. Both must clear for the fire
+  // to happen.
+  const canFire = (k, ms) => {
+    const now = Date.now();
+    if (now - cooldown[k] < ms) return false;
+    try {
+      const attr = 'apmRpgFire' + k.charAt(0).toUpperCase() + k.slice(1);
+      const last = parseInt(document.documentElement.dataset[attr], 10) || 0;
+      if (now - last < ms) return false;
+      document.documentElement.dataset[attr] = String(now);
+    } catch (e) {}
+    cooldown[k] = now;
+    return true;
+  };
 
   const rpgRawWin = (typeof unsafeWindow !== 'undefined' && unsafeWindow) ? unsafeWindow : window;
 
