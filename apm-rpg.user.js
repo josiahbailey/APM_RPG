@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      2.0.9
+// @version      2.0.10
 // @description  Collect and level up roaming pets while you browse.
 // @author       baijosis
 // @icon         https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/icon.png
@@ -333,6 +333,7 @@
         const parsed = newRaw ? JSON.parse(newRaw) : null;
         if (parsed == null) return;
         if (name === K.player) {
+          const prevHide = !!(state.player && state.player.hideRoamers);
           state.player = parsed;
           // Re-apply shape safeguards (v2.0.4): remote writes from an older
           // tab may omit fields we've since added.
@@ -345,6 +346,15 @@
           if (!Array.isArray(state.player.reservePets)) state.player.reservePets = [];
           vlog('[PetRPG] remote state.player synced from another tab');
           if (typeof syncChairsAndSeats === 'function') syncChairsAndSeats();
+          // v2.0.10: storage sync updates data only. Re-apply DOM that plain
+          // state assignment can't reach: collapse classes on the panel tab
+          // and tools tray, plus roamer sprite mounts driven by hideRoamers.
+          if (el && el.panelWrap) el.panelWrap.classList.toggle('rpg-collapsed', !!state.player.panelCollapsed);
+          if (el && el.cornerWrap) el.cornerWrap.classList.toggle('rpg-collapsed', !!state.player.toolsCollapsed);
+          if (!!state.player.hideRoamers !== prevHide) {
+            if (state.player.hideRoamers) { if (typeof removeAllRoamers === 'function') removeAllRoamers(); }
+            else { if (typeof respawnAllRoamers === 'function') respawnAllRoamers(); }
+          }
         } else if (name === K.collection) {
           state.collection = parsed;
         } else if (name === K.equip) {
