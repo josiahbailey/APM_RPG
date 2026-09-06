@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         APM RPG
-// @namespace    https://github.com/josiahbailey/PetRPG
+// @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
 // @version      2.0.6
 // @description  Collect and level up roaming pets while you browse.
 // @author       baijosis
