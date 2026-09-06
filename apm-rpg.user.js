@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      2.0.7
+// @version      2.0.8
 // @description  Collect and level up roaming pets while you browse.
 // @author       baijosis
 // @icon         https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/icon.png
@@ -175,8 +175,10 @@
   const PET_ICON_PX = 48;
   // Baseline font-size pinned across all host sites. v1.6.0 inherited
   // from EAM body (~13px); other sites (~16px) rendered noticeably
-  // bigger. Pin only font-size; keep line-height + font-family inherited.
+  // bigger. Pin all text-metric properties so rendering is site-independent.
   const BASE_FONT_PX = 13;
+  const BASE_FONT_FAMILY = '"Segoe UI", system-ui, sans-serif';
+  const BASE_LINE_HEIGHT = '1.4';
 
   // ================================================================
   // FRAME GUARD
@@ -726,7 +728,7 @@
   // ================================================================
   GM_addStyle([
     '.rpg-root,.rpg-root *{box-sizing:border-box;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}',
-    '.rpg-panel-wrap{font-size:' + BASE_FONT_PX + 'px;position:fixed;right:16px;bottom:16px;z-index:2147483000;display:flex;align-items:stretch;transition:transform 320ms cubic-bezier(0.4,0,0.2,1)}',
+    '.rpg-panel-wrap{font-size:' + BASE_FONT_PX + 'px;font-family:' + BASE_FONT_FAMILY + ';line-height:' + BASE_LINE_HEIGHT + ';font-weight:400;position:fixed;right:16px;bottom:16px;z-index:2147483000;display:flex;align-items:stretch;transition:transform 320ms cubic-bezier(0.4,0,0.2,1)}',
     '.rpg-panel-wrap.rpg-collapsed{transform:translateX(calc(100% - 16px))}',
     '.rpg-panel-tab{width:26px;align-self:stretch;margin-right:-6px;background:rgba(20,20,28,0.65);color:#ffd166;border:1px solid #3b3b48;border-right:none;border-radius:8px 0 0 8px;cursor:pointer;writing-mode:vertical-rl;text-orientation:mixed;display:flex;align-items:center;justify-content:center;font-weight:800;letter-spacing:3px;font-size:12px;user-select:none;transition:background 150ms,color 150ms;backdrop-filter:blur(2px);box-shadow:-3px 0 8px rgba(0,0,0,0.3)}',
     '.rpg-panel-tab:hover{background:rgba(40,40,55,0.75);color:#fff}',
@@ -756,14 +758,14 @@
     '.rpg-reset-btn{font-size:9px;padding:3px 7px;background:rgba(40,0,0,0.8);color:#f77;border:1px solid #633;border-radius:4px;cursor:pointer;opacity:0.7}.rpg-reset-btn:hover{opacity:1;background:#400}',
     '.rpg-help-btn{font-size:9px;padding:3px 7px;background:rgba(40,30,0,0.8);color:#fd7;border:1px solid #663;border-radius:4px;cursor:pointer;opacity:0.7}.rpg-help-btn:hover{opacity:1;background:#420}',
     '.rpg-slack-btn{font-size:9px;padding:3px 7px;background:rgba(74,21,75,0.8);color:#ecb22e;border:1px solid #b48a20;border-radius:4px;cursor:pointer;opacity:0.7}.rpg-slack-btn:hover{opacity:1;background:#611f69}',
-    '.rpg-corner-wrap{font-size:' + BASE_FONT_PX + 'px;position:fixed;left:0;bottom:12px;z-index:2147483000;display:flex;align-items:stretch;transition:transform 320ms cubic-bezier(0.4,0,0.2,1)}',
+    '.rpg-corner-wrap{font-size:' + BASE_FONT_PX + 'px;font-family:' + BASE_FONT_FAMILY + ';line-height:' + BASE_LINE_HEIGHT + ';font-weight:400;position:fixed;left:0;bottom:12px;z-index:2147483000;display:flex;align-items:stretch;transition:transform 320ms cubic-bezier(0.4,0,0.2,1)}',
     '.rpg-corner-wrap.rpg-collapsed{transform:translateX(calc(-100% + 18px))}',
     '.rpg-corner-tools{display:flex;gap:5px;padding:4px 8px;align-items:center;background:rgba(20,20,28,0.4);border:1px solid #3b3b48;border-left:none;border-radius:0 8px 8px 0;backdrop-filter:blur(2px)}',
     '.rpg-corner-tab{width:18px;align-self:stretch;margin-left:-6px;padding:6px 2px;background:rgba(20,20,28,0.4);color:#b8a06a;border:1px solid #3b3b48;border-left:none;border-radius:0 8px 8px 0;cursor:pointer;writing-mode:vertical-rl;text-orientation:mixed;display:flex;align-items:center;justify-content:center;font-weight:700;letter-spacing:1.5px;font-size:5.5px;user-select:none;transition:background 150ms,color 150ms;backdrop-filter:blur(2px);box-shadow:3px 0 8px rgba(0,0,0,0.3)}',
     '.rpg-corner-tab:hover{background:rgba(20,20,28,0.8);color:#e8d4a0}',
     '.rpg-update-toast{position:fixed;right:16px;bottom:120px;z-index:2147483001;padding:4px 10px;font-size:10px;font-weight:800;letter-spacing:0.4px;border-radius:6px;cursor:pointer;background:linear-gradient(135deg,#22c55e,#15803d);color:#fff;border:1px solid #16a34a;box-shadow:0 2px 8px rgba(34,197,94,0.35);animation:rpgUpdatePulse 2s ease-in-out infinite;transition:transform 0.15s ease}.rpg-update-toast:hover{filter:brightness(1.15);transform:translateY(-1px)}.rpg-update-toast:active{transform:translateY(0)}',
     '@keyframes rpgUpdatePulse{0%,100%{box-shadow:0 2px 8px rgba(34,197,94,0.35)}50%{box-shadow:0 2px 10px rgba(34,197,94,0.7),0 0 0 4px rgba(34,197,94,0.12)}}',
-    '.rpg-menu{font-size:' + BASE_FONT_PX + 'px;position:fixed;right:16px;bottom:110px;z-index:2147483001;background:rgba(20,20,28,0.97);border:1px solid #3b3b48;border-radius:12px;padding:12px;color:#eee;max-width:380px;max-height:60vh;overflow-y:auto;box-shadow:0 10px 30px rgba(0,0,0,0.6)}',
+    '.rpg-menu{font-size:' + BASE_FONT_PX + 'px;font-family:' + BASE_FONT_FAMILY + ';line-height:' + BASE_LINE_HEIGHT + ';font-weight:400;position:fixed;right:16px;bottom:110px;z-index:2147483001;background:rgba(20,20,28,0.97);border:1px solid #3b3b48;border-radius:12px;padding:12px;color:#eee;max-width:380px;max-height:60vh;overflow-y:auto;box-shadow:0 10px 30px rgba(0,0,0,0.6)}',
     '.rpg-menu h4{margin:0 0 8px;font-size:12px;color:#ffd166}',
     '.rpg-menu-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}',
     '.rpg-menu-char{text-align:center;cursor:pointer;padding:4px;border-radius:6px}.rpg-menu-char:hover{background:#2a2a36}.rpg-menu-char.active{outline:2px solid #ffd166}',
@@ -775,7 +777,7 @@
     '.rpg-empty-msg{font-size:12px;color:#888;padding:12px 0}',
     '.rpg-dex{max-width:620px;width:calc(100vw - 40px);text-align:left;padding:26px 32px}',
     '.rpg-dex-list{max-height:55vh;overflow-y:auto}',
-    '.rpg-roam{font-size:' + BASE_FONT_PX + 'px;position:fixed;z-index:2147482900;pointer-events:auto;cursor:pointer;transition:left 10s linear,top 10s linear}',
+    '.rpg-roam{font-size:' + BASE_FONT_PX + 'px;font-family:' + BASE_FONT_FAMILY + ';line-height:' + BASE_LINE_HEIGHT + ';font-weight:400;position:fixed;z-index:2147482900;pointer-events:auto;cursor:pointer;transition:left 10s linear,top 10s linear}',
     '.rpg-roam.rpg-grabbed,.rpg-roam.rpg-tossing{transition:none!important}',
     '.rpg-roam.rpg-grabbed{cursor:grabbing;z-index:2147482950}',
     '.rpg-roam.rpg-grabbed img{animation:rpgRoamWiggle 300ms ease-in-out infinite alternate}',
@@ -784,7 +786,7 @@
     '@keyframes rpgRoamPoke{0%{transform:rotate(0) scale(1)}18%{transform:rotate(-12deg) scale(1.08)}36%{transform:rotate(10deg) scale(1.05)}54%{transform:rotate(-6deg) scale(1.03)}72%{transform:rotate(4deg) scale(1.01)}100%{transform:rotate(0) scale(1)}}',
     '.rpg-roam img{width:calc(64px * var(--rpg-scale, 1));height:calc(64px * var(--rpg-scale, 1));object-fit:contain;filter:drop-shadow(0 4px 6px rgba(0,0,0,0.4))}',
     '.rpg-roam .rpg-nametag{font-size:11px;text-align:center;color:#fff;text-shadow:0 1px 2px #000,0 0 4px #000}',
-    '.rpg-wild{font-size:' + BASE_FONT_PX + 'px;position:fixed;z-index:2147483100;cursor:pointer;transition:left 3s linear,top 3s linear,transform 300ms;text-align:center}',
+    '.rpg-wild{font-size:' + BASE_FONT_PX + 'px;font-family:' + BASE_FONT_FAMILY + ';line-height:' + BASE_LINE_HEIGHT + ';font-weight:400;position:fixed;z-index:2147483100;cursor:pointer;transition:left 3s linear,top 3s linear,transform 300ms;text-align:center}',
     '.rpg-pet-sprite{position:relative;display:inline-block;line-height:0}',
     // ── Reflective-film overlay (hollow + rainbow variants) ──
     // ::after is a gradient masked to the pet's alpha channel (via --rpg-pet-mask, set inline per-instance),
@@ -799,7 +801,7 @@
     '.rpg-levelup-anim{animation:rpgLevelUp 900ms ease-out}',
     '.rpg-levelup-toast{position:fixed;left:50%;top:30%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.85);color:gold;font-size:22px;font-weight:800;padding:12px 20px;border-radius:10px;border:2px solid gold;z-index:2147483200;pointer-events:none;animation:rpgLevelUp 1200ms ease-out}',
     '.rpg-catch-toast{position:fixed;left:50%;top:30%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.88);color:var(--rpg-rarity-color, gold);font-size:20px;font-weight:800;padding:12px 22px;border-radius:10px;border:2px solid var(--rpg-rarity-color, gold);box-shadow:0 0 24px var(--rpg-rarity-color, gold);z-index:2147483200;pointer-events:none;animation:rpgLevelUp 1600ms ease-out;text-align:center;line-height:1.4}',
-    '.rpg-modal{font-size:' + BASE_FONT_PX + 'px;position:fixed;inset:0;z-index:2147483400;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center}',
+    '.rpg-modal{font-size:' + BASE_FONT_PX + 'px;font-family:' + BASE_FONT_FAMILY + ';line-height:' + BASE_LINE_HEIGHT + ';font-weight:400;position:fixed;inset:0;z-index:2147483400;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center}',
     '.rpg-modal-inner{background:#1a1a24;color:#eee;padding:22px 26px;border-radius:12px;border:2px solid gold;text-align:center;max-width:340px;position:relative}',
     '.rpg-modal-close{position:absolute;top:10px;right:10px;width:26px;height:26px;border-radius:50%;background:rgba(120,120,140,0.18);color:#bbb;font-size:16px;font-weight:900;display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;line-height:1;z-index:5;padding:0;margin:0;transition:background 150ms,color 150ms,transform 150ms}.rpg-modal-close:hover{background:#dc2626;color:#fff;transform:scale(1.1)}',
     '.rpg-modal-inner button{margin-top:14px;padding:8px 16px;background:gold;color:#111;border:none;border-radius:6px;font-weight:700;cursor:pointer}',
@@ -928,7 +930,7 @@
     '.rpg-panel-shake{animation:rpgPanelShake 700ms cubic-bezier(0.36,0.07,0.19,0.97) both}',
     '@keyframes rpgPanelShake{10%,90%{transform:translate3d(-1px,0,0)}20%,80%{transform:translate3d(2px,0,0)}30%,50%,70%{transform:translate3d(-4px,0,0)}40%,60%{transform:translate3d(4px,0,0)}}',
     '.rpg-menu.rpg-menu-pet{max-height:42vh;width:340px;max-width:340px;min-width:340px;box-sizing:border-box}',
-    '.rpg-reserve{font-size:' + BASE_FONT_PX + 'px;position:fixed;right:364px;bottom:110px;z-index:2147483001;background:rgba(20,20,28,0.45);border:1px solid #3b3b48;border-radius:12px;padding:10px;color:#eee;width:150px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.6);box-sizing:border-box;overflow:hidden;backdrop-filter:blur(2px)}',
+    '.rpg-reserve{font-size:' + BASE_FONT_PX + 'px;font-family:' + BASE_FONT_FAMILY + ';line-height:' + BASE_LINE_HEIGHT + ';font-weight:400;position:fixed;right:364px;bottom:110px;z-index:2147483001;background:rgba(20,20,28,0.45);border:1px solid #3b3b48;border-radius:12px;padding:10px;color:#eee;width:150px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.6);box-sizing:border-box;overflow:hidden;backdrop-filter:blur(2px)}',
     '.rpg-reserve::before{content:"";position:absolute;inset:0;background-image:var(--rpg-banner-img,none);background-size:cover;background-position:center;background-repeat:no-repeat;opacity:0.35;pointer-events:none;border-radius:inherit;z-index:0}',
     '.rpg-reserve > *{position:relative;z-index:1}',
     '.rpg-reserve-title{font-size:11px;color:#ffd166;letter-spacing:1px;font-weight:800;margin-bottom:2px}',
