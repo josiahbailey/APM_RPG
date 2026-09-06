@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         PetRPG
+// @name         APM RPG
 // @namespace    https://github.com/josiahbailey/PetRPG
-// @version      2.0.4
+// @version      2.0.5
 // @description  Collect and level up roaming pets while you browse.
 // @author       baijosis
 // @icon         https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/icon.png
@@ -189,15 +189,14 @@
   // ================================================================
   const STORAGE_VERSION = 6;
   const K = {
-    version: 'petrpg_version', player: 'petrpg_player_v2',
-    collection: 'petrpg_collection_v2', equip: 'petrpg_equip_v2',
-    caughtLog: 'petrpg_caughtlog_v1',
-    starter: 'petrpg_starter_granted',
-    howto: 'petrpg_howto_seen',
-    installedVersion: 'petrpg_installed_version_v1',
-    updateCache: 'petrpg_update_v1',
-    v1_player: 'petrpg_player_v1', v1_pets: 'petrpg_pets_v1', v1_equip: 'petrpg_equip_v1',
-    apmMigrated: 'petrpg_apm_bridge_migrated_v1',
+    version: 'apm_rpg_version', player: 'apm_rpg_player_v2',
+    collection: 'apm_rpg_collection_v2', equip: 'apm_rpg_equip_v2',
+    caughtLog: 'apm_rpg_caughtlog_v1',
+    starter: 'apm_rpg_starter_granted',
+    howto: 'apm_rpg_howto_seen',
+    installedVersion: 'apm_rpg_installed_version_v1',
+    updateCache: 'apm_rpg_update_v1',
+    v1_player: 'apm_rpg_player_v1', v1_pets: 'apm_rpg_pets_v1', v1_equip: 'apm_rpg_equip_v1',
   };
   const _devSink = {};
   const readRaw  = (k) => DEV_MODE ? (_devSink[k] || null) : GM_getValue(k, null);
@@ -205,28 +204,6 @@
   const deleteRaw = (k) => { if (DEV_MODE) { delete _devSink[k]; return; } GM_deleteValue(k); };
   const load = (k, fb) => { try { const v = readRaw(k); return v == null ? fb : JSON.parse(v); } catch (e) { return fb; } };
   const save = (k, v) => writeRaw(k, JSON.stringify(v));
-
-  // v2.0 rename migration: copy any apm_rpg_* keys into their petrpg_* twins.
-  // Idempotent — only copies when the target doesn't already exist. Old keys
-  // are best-effort deleted; leaving orphans is harmless.
-  (function migratePrefix() {
-    const suffixes = [
-      'version','player_v2','collection_v2','equip_v2','caughtlog_v1',
-      'starter_granted','howto_seen','installed_version_v1','update_v1',
-      'player_v1','pets_v1','equip_v1'
-    ];
-    for (const s of suffixes) {
-      const oldK = 'apm_rpg_' + s;
-      const newK = 'petrpg_' + s;
-      try {
-        const oldVal = readRaw(oldK);
-        if (oldVal == null) continue;
-        if (readRaw(newK) != null) continue;
-        writeRaw(newK, oldVal);
-        try { deleteRaw(oldK); } catch (e) {}
-      } catch (e) {}
-    }
-  })();
 
   const migrateStorage = () => {
     const ver = load(K.version, 0);
@@ -1117,20 +1094,8 @@
       class: 'rpg-corner-wrap' + (state.player.toolsCollapsed ? ' rpg-collapsed' : ''),
     });
     el.cornerTools = $('div', { class: 'rpg-corner-tools' });
-    el.importBtn = $('button', {
-      class: 'rpg-import-btn rpg-help-btn',
-      type: 'button',
-      html: 'Import v1',
-      title: 'Import save data from APM RPG v1.x',
-      onclick: (e) => {
-        if (e && e.preventDefault) e.preventDefault();
-        if (e && e.stopPropagation) e.stopPropagation();
-        showImportModal();
-      }
-    });
     el.cornerTools.appendChild(el.resetBtn);
     el.cornerTools.appendChild(el.helpBtn);
-    el.cornerTools.appendChild(el.importBtn);
     el.cornerTools.appendChild(el.slackBtn);
     el.cornerWrap.appendChild(el.cornerTools);
     el.cornerTab = $('div', {
@@ -2957,194 +2922,6 @@
     document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
   };
 
-  // ================================================================
-  // IMPORT FROM APM RPG v1.x
-  //
-  // Tampermonkey isolates each script's GM storage by internal UUID, so
-  // PetRPG's sandbox cannot read the old "APM RPG" script's data directly.
-  // We provide two paths:
-  //
-  //   1. AUTO (via DOM handoff): the user pastes a small snippet into the
-  //      old script's TM Editor. That snippet, running in the OLD sandbox
-  //      with GM_getValue access, dumps its storage to
-  //      `document.documentElement.dataset.apmRpgExport` on boot. PetRPG
-  //      running on the same page reads that dataset attr and imports.
-  //
-  //   2. MANUAL: user copies each apm_rpg_* value from TM's Values tab and
-  //      pastes into showImportModal()'s textarea.
-  //
-  // Both paths call applyImportDump() which sets K.apmMigrated so nothing
-  // ever overwrites subsequent play.
-  // ================================================================
-  const APM_KEY_MAP = {
-    'apm_rpg_version':              'version',
-    'apm_rpg_player_v2':            'player',
-    'apm_rpg_collection_v2':        'collection',
-    'apm_rpg_equip_v2':             'equip',
-    'apm_rpg_caughtlog_v1':         'caughtLog',
-    'apm_rpg_starter_granted':      'starter',
-    'apm_rpg_howto_seen':           'howto',
-    'apm_rpg_installed_version_v1': 'installedVersion',
-    // Accept petrpg_ keys too so users can paste an existing PetRPG dump
-    'petrpg_version':              'version',
-    'petrpg_player_v2':            'player',
-    'petrpg_collection_v2':        'collection',
-    'petrpg_equip_v2':             'equip',
-    'petrpg_caughtlog_v1':         'caughtLog',
-    'petrpg_starter_granted':      'starter',
-    'petrpg_howto_seen':           'howto',
-    'petrpg_installed_version_v1': 'installedVersion',
-  };
-
-  const applyImportDump = (dump, opts) => {
-    opts = opts || {};
-    if (!dump || typeof dump !== 'object') {
-      return { ok: false, error: 'not an object', imported: 0 };
-    }
-    let imported = 0;
-    const importedKeys = [];
-    for (const [srcKey, kName] of Object.entries(APM_KEY_MAP)) {
-      if (dump[srcKey] == null) continue;
-      const targetK = K[kName];
-      if (!targetK) continue;
-      // The dump value should already be the string that was in GM storage
-      // (JSON.stringified). Write raw so nothing gets double-encoded.
-      let val = dump[srcKey];
-      if (typeof val !== 'string') {
-        try { val = JSON.stringify(val); } catch (e) { continue; }
-      }
-      writeRaw(targetK, val);
-      imported++;
-      importedKeys.push(srcKey);
-    }
-    if (imported === 0) return { ok: false, error: 'no recognized keys', imported: 0 };
-    // If any player-side state came through, suppress first-run modals.
-    if (dump['apm_rpg_player_v2'] || dump['petrpg_player_v2']) {
-      writeRaw(K.starter, '1');
-      writeRaw(K.howto,   '1');
-    }
-    save(K.apmMigrated, true);
-    console.log('[PetRPG] imported ' + imported + ' key(s):', importedKeys);
-    if (!opts.noReload) {
-      setTimeout(() => { try { location.reload(); } catch (e) {} }, 500);
-    }
-    return { ok: true, imported: imported, keys: importedKeys };
-  };
-
-  // Poll for the DOM handoff attribute for up to 8 seconds — the old script
-  // is @run-at document-start too, so it usually writes almost immediately.
-  const importFromApmRpgDom = async () => {
-    if (load(K.apmMigrated, false)) return;
-    for (let i = 0; i < 16; i++) {
-      try {
-        const raw = document.documentElement && document.documentElement.dataset && document.documentElement.dataset.apmRpgExport;
-        if (raw) {
-          try {
-            const dump = JSON.parse(raw);
-            const result = applyImportDump(dump);
-            if (result.ok) {
-              vlog('[PetRPG] auto-import ok:', result);
-              // Clear so old script boot's dump doesn't linger; harmless if it fails
-              try { delete document.documentElement.dataset.apmRpgExport; } catch (e) {}
-              return;
-            } else {
-              console.warn('[PetRPG] auto-import found dump but couldn\'t apply:', result.error);
-              return;
-            }
-          } catch (e) {
-            console.warn('[PetRPG] auto-import parse failed:', e && e.message);
-            return;
-          }
-        }
-      } catch (e) {}
-      await new Promise(r => setTimeout(r, 500));
-    }
-    // Silent: no dump found on this page. Manual path stays available.
-  };
-
-  // The tiny snippet users paste into the old script's TM Editor.
-  const APM_EXPORT_SNIPPET = "// PetRPG migration bridge — dumps GM storage to a DOM attr\ntry {\n  const _keys = ['apm_rpg_version','apm_rpg_player_v2','apm_rpg_collection_v2','apm_rpg_equip_v2','apm_rpg_caughtlog_v1','apm_rpg_starter_granted','apm_rpg_howto_seen','apm_rpg_installed_version_v1'];\n  const _dump = {};\n  for (const _k of _keys) { const _v = GM_getValue(_k, null); if (_v != null) _dump[_k] = _v; }\n  document.documentElement.dataset.apmRpgExport = JSON.stringify(_dump);\n  console.log('[APM RPG export]', Object.keys(_dump).length, 'keys ready for PetRPG');\n} catch (e) { console.warn('[APM RPG export] failed:', e); }";
-
-  const showImportModal = () => {
-    if (document.querySelector('.rpg-import-modal')) return;
-    const modal = $('div', { class: 'rpg-modal rpg-import-modal' });
-    const inner = $('div', { class: 'rpg-modal-inner', style: { maxWidth: '640px', textAlign: 'left', padding: '20px 24px' } });
-    inner.appendChild($('h3', { html: 'IMPORT FROM APM RPG v1.x', style: { margin: '0 0 4px', color: '#ffd166', textAlign: 'center' } }));
-    inner.appendChild($('div', {
-      html: 'Tampermonkey keeps each script\'s save data private, so PetRPG can\'t read the old <b>APM RPG</b> script\'s storage directly. Pick a path:',
-      style: { fontSize: '12px', color: '#aaa', marginBottom: '14px', textAlign: 'center' }
-    }));
-
-    // Option A
-    inner.appendChild($('div', { html: '<b style="color:#ffd166">Option A — auto-import</b> (recommended, 1-time setup):', style: { fontSize: '12px', marginBottom: '6px' } }));
-    inner.appendChild($('ol', {
-      html:
-        '<li>Open Tampermonkey Dashboard → click the <b>APM RPG</b> script row.</li>' +
-        '<li>Go to the <b>Editor</b> tab.</li>' +
-        '<li>Paste the snippet below just after the <code>(function () {</code> line at the top.</li>' +
-        '<li>Save with <kbd>Ctrl</kbd>+<kbd>S</kbd>.</li>' +
-        '<li>Reload any EAM / PTP page. PetRPG will detect the dump on next load and import automatically.</li>',
-      style: { fontSize: '11px', color: '#ccc', margin: '0 0 8px 20px', paddingLeft: '0' }
-    }));
-    const snippetBox = $('textarea', {
-      value: APM_EXPORT_SNIPPET,
-      readOnly: true,
-      style: { width: '100%', height: '110px', fontSize: '10px', fontFamily: 'monospace', background: '#0e0e18', color: '#dcdcdc', border: '1px solid #3b3b48', borderRadius: '4px', padding: '6px', resize: 'vertical' }
-    });
-    inner.appendChild(snippetBox);
-    const copyBtn = $('button', {
-      html: 'Copy snippet',
-      style: { fontSize: '11px', padding: '4px 10px', margin: '4px 0 14px', cursor: 'pointer' },
-      onclick: () => {
-        snippetBox.select();
-        try { document.execCommand('copy'); copyBtn.innerHTML = 'Copied!'; setTimeout(() => copyBtn.innerHTML = 'Copy snippet', 1200); } catch (e) {}
-      }
-    });
-    inner.appendChild(copyBtn);
-
-    // Option B
-    inner.appendChild($('div', { html: '<b style="color:#ffd166">Option B — manual paste:</b>', style: { fontSize: '12px', marginBottom: '4px' } }));
-    inner.appendChild($('div', {
-      html: 'Open Tampermonkey Dashboard → <b>APM RPG</b> → <b>Values</b> (or <b>Storage</b>) tab. Copy each <code>apm_rpg_*</code> value and assemble into a JSON object like <code>{"apm_rpg_player_v2":"...","apm_rpg_collection_v2":"..."}</code>. Paste below.',
-      style: { fontSize: '11px', color: '#ccc', marginBottom: '6px' }
-    }));
-    const ta = $('textarea', {
-      placeholder: '{\n  "apm_rpg_player_v2": "{\\"level\\":5,...}",\n  ...\n}',
-      style: { width: '100%', height: '90px', fontSize: '11px', fontFamily: 'monospace', background: '#0e0e18', color: '#dcdcdc', border: '1px solid #3b3b48', borderRadius: '4px', padding: '6px', resize: 'vertical' }
-    });
-    inner.appendChild(ta);
-    const status = $('div', { style: { fontSize: '11px', marginTop: '6px', minHeight: '14px' } });
-    inner.appendChild(status);
-
-    const importBtn = $('button', {
-      html: 'Import',
-      style: { fontSize: '13px', padding: '6px 18px', marginRight: '8px', cursor: 'pointer', background: '#22c55e', color: '#000', border: 'none', borderRadius: '4px', fontWeight: '700' },
-      onclick: () => {
-        let dump;
-        try {
-          dump = JSON.parse(ta.value);
-        } catch (e) {
-          status.innerHTML = '<span style="color:#ef4444">Invalid JSON: ' + (e.message || e) + '</span>';
-          return;
-        }
-        const result = applyImportDump(dump);
-        if (result.ok) {
-          status.innerHTML = '<span style="color:#22c55e">Imported ' + result.imported + ' key(s). Reloading...</span>';
-        } else {
-          status.innerHTML = '<span style="color:#ef4444">' + (result.error || 'nothing to import') + '</span>';
-        }
-      }
-    });
-    inner.appendChild(importBtn);
-    inner.appendChild($('button', {
-      html: 'Close',
-      style: { fontSize: '13px', padding: '6px 18px', cursor: 'pointer', background: '#374151', color: '#eee', border: 'none', borderRadius: '4px' },
-      onclick: () => modal.remove()
-    }));
-
-    modal.appendChild(inner);
-    document.body.appendChild(modal);
-  };
 
   // Expose PET_RPG on the page window so it's usable from DevTools console.
   // Chrome+TM sometimes blocks direct unsafeWindow.foo = ... but reads
@@ -3155,21 +2932,11 @@
       __bridge: true,
       state: state,
       getState: () => state,
-      importJson: (str) => { try { return applyImportDump(JSON.parse(str)); } catch (e) { return { ok: false, error: String((e && e.message) || e) }; } },
-      importObject: (obj) => applyImportDump(obj),
-      importPaste: () => showImportModal(),
-      checkOldExport: () => { try { const raw = document.documentElement.dataset.apmRpgExport; return raw ? JSON.parse(raw) : null; } catch (e) { return { error: String((e && e.message) || e) }; } },
-      migrated: () => load(K.apmMigrated, false),
-      forceReimport: () => { save(K.apmMigrated, false); location.reload(); },
       version: LOCAL_VERSION,
       help: () => {
         const list = [
-          'PET_RPG.state              live in-memory state (player/collection/equip)',
-          'PET_RPG.importPaste()      open the import modal',
-          'PET_RPG.importJson(str)    programmatic JSON import',
-          'PET_RPG.checkOldExport()   inspect the DOM export attr (if any)',
-          'PET_RPG.migrated()         true if apm import already ran',
-          'PET_RPG.forceReimport()    clear the flag and reload'
+          'PET_RPG.state    live in-memory state (player/collection/equip)',
+          'PET_RPG.version  installed script version'
         ].join('\n');
         console.log('%c[PetRPG] commands','color:#22c55e;font-weight:bold');
         console.log(list);
@@ -3190,10 +2957,8 @@
 
   const boot = () => {
     console.log('[PetRPG] v' + LOCAL_VERSION + ' loaded');
-    // Expose PET_RPG on the page so users can inspect / import from console
+    // Expose PET_RPG on the page so users can inspect from console
     exposePetRpgToPage();
-    // Auto-import from APM RPG v1.x via DOM handoff (see importFromApmRpgDom)
-    importFromApmRpgDom();
     // Preload images (CSP-safe blob URLs), then refresh existing DOM once done.
     // Renders proceed with original URLs (may be blocked); blobs snap in when ready.
     preloadImages().then(() => { try { refreshAllImages(); } catch (e) {} });
