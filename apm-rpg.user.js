@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      2.0.10
+// @version      2.0.12
 // @description  Collect and level up roaming pets while you browse.
 // @author       baijosis
 // @icon         https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/icon.png
@@ -144,6 +144,7 @@
     pageChange: 5,
     catch: { Common: 5, Rare: 15, Epic: 50, Legendary: 150, Ancient: 500 },
   };
+  const XP_MULTIPLIER = 2;  // global XP boost; leveling felt slow at 1x
 
   const NAV_COOLDOWN_MS       = 2000;
   const PAGE_CHANGE_XP_CHANCE = 0.15;  // 15% chance to award XP on SPA nav
@@ -168,7 +169,7 @@
     normal:  { label: 'Normal',  catchMult: 1.0, chance: 1,      badge: '',        color: '#888' },
     shiny:   { label: 'Shiny',   catchMult: 1.0, chance: 0.01,   badge: '\u2605', color: '#facc15' },
     hollow:  { label: 'Hollow',  catchMult: 1.0, chance: 0.005,  badge: '\u25C6', color: '#cbd5e1' },
-    rainbow: { label: 'Rainbow', catchMult: 1.0, chance: 0.001,  badge: '\u2726', color: 'rainbow' },
+    rainbow: { label: 'Rainbow', catchMult: 1.0, chance: 0.0025, badge: '\u2726', color: 'rainbow' },
   };
   const VARIANT_ORDER = ['rainbow', 'hollow', 'shiny']; // rarest first
   const PORTRAIT_PX = 72;
@@ -1841,6 +1842,7 @@
   };
   const grantPlayerXP = (amount, reason) => {
     if (!amount) return;
+    amount = Math.round(amount * XP_MULTIPLIER);
     // Refresh player from storage first to pick up any changes from other tabs
     // that arrived between the last listener event and now.
     state.player = load(K.player, state.player);
