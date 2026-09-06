@@ -1,15 +1,11 @@
 // ==UserScript==
-// @name         APM RPG
-// @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      1.6.0
-// @description  Gamified RPG layer over APM/PTP - levels, EXP, roaming pets, wild pet catching.
+// @name         PetRPG
+// @namespace    https://github.com/josiahbailey/PetRPG
+// @version      2.0.0
+// @description  Collect and level up roaming pets while you browse.
 // @author       baijosis
 // @icon         https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/icon.png
-// @match        https://*.eam.hxgnsmartcloud.com/*
-// @match        https://*.sso.eam.hxgnsmartcloud.com/*
-// @match        https://*.eam.aws.a2z.com/*
-// @match        https://*.ptp.amazon.dev/*
-// @match        https://*.insights.amazon.dev/*
+// @match        *://*/*
 // @run-at       document-start
 // @grant        GM_setValue
 // @grant        GM_getValue
@@ -152,18 +148,6 @@
   const NAV_COOLDOWN_MS       = 2000;
   const PAGE_CHANGE_XP_CHANCE = 0.15;  // 15% chance to award XP on SPA nav
 
-  // EAM's SPA rarely uses pushState/replaceState — most page transitions
-  // come through XHR calls to /web/base/<SCREEN>.xmlhttp endpoints. We
-  // classify by URL path and by resolved host so relative screen codes
-  // (USRTAB, USAGE, ...) still count.
-  const EAM_API_URL_RE   = /\/web\/base\/[A-Za-z0-9_]+\.xmlhttp/i;
-  const EAM_HEARTBEAT_RE = /(?:\/web\/base\/)?(?:SESSION|BSFOOTR|KEEPALIVE|BSTIMR|IDLTIMR)(?:\.xmlhttp)?(?:$|[?&])/i;
-  const EAM_HOST_RE      = /(?:^|\.)eam\.(?:hxgnsmartcloud\.com|aws\.a2z\.com)$/i;
-  const resolveUrl = (u) => {
-    try { return new URL(String(u || ''), (typeof location !== 'undefined' ? location.href : undefined)).href; }
-    catch (e) { return String(u || ''); }
-  };
-  const hostOf = (u) => { try { return new URL(u).hostname; } catch (e) { return ''; } };
 
 
   const xpToNextLevel = (level) => Math.floor(100 * Math.pow(level, 1.35));
@@ -197,43 +181,22 @@
     try { return window.self === window.top; } catch (e) { return false; }
   })();
 
-  if (!IS_TOP) {
-    // Subframe: probe EAM until getUser() works, then post to top and stop.
-    try {
-      let attempts = 0;
-      const trySend = () => {
-        try {
-          const eam = window.EAM && window.EAM.AppData && window.EAM.AppData.getUser && window.EAM.AppData.getUser();
-          if (typeof eam === 'string' && eam) {
-            window.top.postMessage({ __apmRpg: true, type: 'username', value: eam }, '*');
-            return true;
-          }
-        } catch (e) {}
-        return false;
-      };
-      if (!trySend()) {
-        const iv = setInterval(() => {
-          attempts++;
-          if (trySend() || attempts >= 30) clearInterval(iv);
-        }, 1500);
-      }
-    } catch (e) {}
-    return;
-  }
+  // Only run in the top frame — no cross-frame username reporting needed.
+  if (!IS_TOP) return;
 
   // ================================================================
   // STORAGE
   // ================================================================
-  const STORAGE_VERSION = 5;
+  const STORAGE_VERSION = 6;
   const K = {
-    version: 'apm_rpg_version', player: 'apm_rpg_player_v2',
-    collection: 'apm_rpg_collection_v2', equip: 'apm_rpg_equip_v2',
-    caughtLog: 'apm_rpg_caughtlog_v1',
-    starter: 'apm_rpg_starter_granted',
-    howto: 'apm_rpg_howto_seen',
-    installedVersion: 'apm_rpg_installed_version_v1',
-    updateCache: 'apm_rpg_update_v1',
-    v1_player: 'apm_rpg_player_v1', v1_pets: 'apm_rpg_pets_v1', v1_equip: 'apm_rpg_equip_v1',
+    version: 'petrpg_version', player: 'petrpg_player_v2',
+    collection: 'petrpg_collection_v2', equip: 'petrpg_equip_v2',
+    caughtLog: 'petrpg_caughtlog_v1',
+    starter: 'petrpg_starter_granted',
+    howto: 'petrpg_howto_seen',
+    installedVersion: 'petrpg_installed_version_v1',
+    updateCache: 'petrpg_update_v1',
+    v1_player: 'petrpg_player_v1', v1_pets: 'petrpg_pets_v1', v1_equip: 'petrpg_equip_v1',
   };
   const _devSink = {};
   const readRaw  = (k) => DEV_MODE ? (_devSink[k] || null) : GM_getValue(k, null);
@@ -241,6 +204,28 @@
   const deleteRaw = (k) => { if (DEV_MODE) { delete _devSink[k]; return; } GM_deleteValue(k); };
   const load = (k, fb) => { try { const v = readRaw(k); return v == null ? fb : JSON.parse(v); } catch (e) { return fb; } };
   const save = (k, v) => writeRaw(k, JSON.stringify(v));
+
+  // v2.0 rename migration: copy any apm_rpg_* keys into their petrpg_* twins.
+  // Idempotent — only copies when the target doesn't already exist. Old keys
+  // are best-effort deleted; leaving orphans is harmless.
+  (function migratePrefix() {
+    const suffixes = [
+      'version','player_v2','collection_v2','equip_v2','caughtlog_v1',
+      'starter_granted','howto_seen','installed_version_v1','update_v1',
+      'player_v1','pets_v1','equip_v1'
+    ];
+    for (const s of suffixes) {
+      const oldK = 'apm_rpg_' + s;
+      const newK = 'petrpg_' + s;
+      try {
+        const oldVal = readRaw(oldK);
+        if (oldVal == null) continue;
+        if (readRaw(newK) != null) continue;
+        writeRaw(newK, oldVal);
+        try { deleteRaw(oldK); } catch (e) {}
+      } catch (e) {}
+    }
+  })();
 
   const migrateStorage = () => {
     const ver = load(K.version, 0);
@@ -332,7 +317,7 @@
       } else if (cmpVersion(parsed, LOCAL_VERSION) > 0) {
         updateInfo.newerLocalVersion = parsed;
         if (prev !== parsed) {
-          vlog('[APM RPG] a newer version (' + parsed + ') is installed elsewhere; hiding update button');
+          vlog('[PetRPG] a newer version (' + parsed + ') is installed elsewhere; hiding update button');
         }
       } else {
         updateInfo.newerLocalVersion = null;
@@ -345,7 +330,7 @@
 
   const setupMultiTabSync = () => {
     if (typeof GM_addValueChangeListener === 'undefined') {
-      vlog('[APM RPG] multi-tab sync unavailable (GM_addValueChangeListener not granted)');
+      vlog('[PetRPG] multi-tab sync unavailable (GM_addValueChangeListener not granted)');
       return;
     }
     const onRemote = (name, oldRaw, newRaw, remote) => {
@@ -370,7 +355,7 @@
           respawnAllRoamers();
         }
       } catch (e) {
-        console.warn('[APM RPG] remote sync failed for', name, e);
+        console.warn('[PetRPG] remote sync failed for', name, e);
       }
     };
     GM_addValueChangeListener(K.player,     onRemote);
@@ -383,12 +368,12 @@
         const v = newRaw ? JSON.parse(newRaw) : null;
         if (v && cmpVersion(v, LOCAL_VERSION) > 0) {
           updateInfo.newerLocalVersion = v;
-          vlog('[APM RPG] newer version installed remotely: v' + v);
+          vlog('[PetRPG] newer version installed remotely: v' + v);
           if (typeof renderPanel === 'function') renderPanel();
         }
       } catch (e) {}
     });
-    vlog('[APM RPG] multi-tab sync active');
+    vlog('[PetRPG] multi-tab sync active');
   };
 
   // Ensure equip has v3 shape even if a stale object was loaded
@@ -491,77 +476,12 @@
   const LOCAL_VERSION = (typeof GM_info !== 'undefined' && GM_info.script && GM_info.script.version) || '0.0.0';
 
   // ---- Safe reload ----
-  // EAM is a fragment-routed SPA on top of an iframe layout. Naive
-  // `window.top.location.href = X` navigations from a Tampermonkey userscript
-  // sandbox get intercepted by the SPA's history layer and land on a
-  // reconstructed/stale URL.
-  //
-  // APM Master's forceRedirect() (install.user.js) uses this exact pattern:
-  //   1. unsafeWindow (raw page window, bypasses TM's sandbox proxy)
-  //   2. .location.replace() (not .href = X) — the SPA can't intercept it the
-  //      same way and it bypasses history/hashchange handlers
-  //   3. Also sets a guard flag so double-triggers can't happen
-  //
-  // We copy that pattern here with multiple fallbacks; each attempt is
-  // logged for debugging if reset gets stuck.
-  const RELOAD_URL = 'https://us1.eam.hxgnsmartcloud.com/web/base/logindisp?tenant=AMAZONRMENA_PRD';
+  // Generic reload: just call location.reload(). No SPA-specific gymnastics.
   const safeReload = () => {
-    if (typeof window !== 'undefined' && window.__apmRpgRedirecting) {
-      vlog('[APM RPG] safeReload: already redirecting, skipping');
-      return;
-    }
-    try { window.__apmRpgRedirecting = true; } catch (e) {}
-    vlog('[APM RPG] safeReload -> ' + RELOAD_URL);
-
-    // Best pointer to the raw page window — bypasses Tampermonkey's proxy.
-    const rawWin = (typeof unsafeWindow !== 'undefined' && unsafeWindow) ? unsafeWindow : null;
-
-    // Ordered navigation strategies. First to succeed wins.
-    const strategies = [];
-    if (rawWin) {
-      try {
-        const rawTop = rawWin.top;
-        if (rawTop && rawTop.location) {
-          strategies.push({ tag: 'unsafeWindow.top.location.replace', run: () => rawTop.location.replace(RELOAD_URL) });
-          strategies.push({ tag: 'unsafeWindow.top.location.assign',  run: () => rawTop.location.assign(RELOAD_URL) });
-          strategies.push({ tag: 'unsafeWindow.top.location.href',    run: () => { rawTop.location.href = RELOAD_URL; } });
-        }
-      } catch (e) { console.log('[APM RPG] safeReload: unsafeWindow.top unreachable:', e && e.message); }
-      try {
-        strategies.push({ tag: 'unsafeWindow.location.replace', run: () => rawWin.location.replace(RELOAD_URL) });
-        strategies.push({ tag: 'unsafeWindow.location.assign',  run: () => rawWin.location.assign(RELOAD_URL) });
-        strategies.push({ tag: 'unsafeWindow.location.href',    run: () => { rawWin.location.href = RELOAD_URL; } });
-      } catch (e) {}
-    }
-    // Sandbox fallbacks.
-    try {
-      const sTop = window.top;
-      if (sTop && sTop.location) {
-        strategies.push({ tag: 'window.top.location.replace', run: () => sTop.location.replace(RELOAD_URL) });
-        strategies.push({ tag: 'window.top.location.assign',  run: () => sTop.location.assign(RELOAD_URL) });
-        strategies.push({ tag: 'window.top.location.href',    run: () => { sTop.location.href = RELOAD_URL; } });
-      }
-    } catch (e) { console.log('[APM RPG] safeReload: window.top unreachable:', e && e.message); }
-    strategies.push({ tag: 'window.location.replace', run: () => window.location.replace(RELOAD_URL) });
-    strategies.push({ tag: 'window.location.assign',  run: () => window.location.assign(RELOAD_URL) });
-    strategies.push({ tag: 'window.location.href',    run: () => { window.location.href = RELOAD_URL; } });
-    // Last resort: open in a new tab (TM will still preserve the source tab)
-    strategies.push({ tag: 'window.open',             run: () => window.open(RELOAD_URL, '_top') });
-
-    for (const s of strategies) {
-      try {
-        console.log('[APM RPG] safeReload try:', s.tag);
-        s.run();
-        // Give the navigation a beat to actually kick off before trying another.
-        // If we're still here after 1s, the strategy silently no-oped — try next.
-        // But we return immediately; subsequent strategies fire only if this
-        // throws synchronously.
-        return;
-      } catch (e) {
-        console.log('[APM RPG] safeReload:', s.tag, 'threw:', e && e.message);
-      }
-    }
-    console.warn('[APM RPG] safeReload: all strategies exhausted');
+    if (typeof window !== 'undefined' && window.__petRpgRedirecting) return;
+    try { window.__petRpgRedirecting = true; } catch (e) {}
+    try { location.reload(); }
+    catch (e) { try { location.href = location.href; } catch (e2) {} }
   };
   const updateInfo = { checkedAt: 0, latest: null, available: false, newerLocalVersion: null };
   const loadUpdateCache = () => {
@@ -586,33 +506,33 @@
   };
   const checkForUpdate = (force) => new Promise((resolve) => {
     if (!UPDATE_META_URL || UPDATE_META_URL.indexOf('REPLACE_ME') !== -1) {
-      console.warn('[APM RPG] update check skipped: URL not configured');
+      console.warn('[PetRPG] update check skipped: URL not configured');
       return resolve({ skipped: 'url', local: LOCAL_VERSION });
     }
     if (typeof GM_xmlhttpRequest === 'undefined') {
-      console.warn('[APM RPG] update check skipped: GM_xmlhttpRequest not granted');
+      console.warn('[PetRPG] update check skipped: GM_xmlhttpRequest not granted');
       return resolve({ skipped: 'no-xhr', local: LOCAL_VERSION });
     }
     const now = Date.now();
     if (!force && (now - updateInfo.checkedAt) < UPDATE_CHECK_INTERVAL_MS) {
       const ageMin = Math.round((now - updateInfo.checkedAt) / 60000);
-      vlog('[APM RPG] update check rate-limited (last check ' + ageMin + ' min ago); use APM_RPG.checkUpdate() to force');
+      vlog('[PetRPG] update check rate-limited (last check ' + ageMin + ' min ago); use PET_RPG.checkUpdate() to force');
       return resolve({ skipped: 'rate-limit', local: LOCAL_VERSION, latest: updateInfo.latest, available: updateInfo.available });
     }
     try {
-      vlog('[APM RPG] checking for update...');
+      vlog('[PetRPG] checking for update...');
       GM_xmlhttpRequest({
         method: 'GET',
         url: UPDATE_META_URL + (UPDATE_META_URL.indexOf('?') === -1 ? '?' : '&') + '_=' + now,
         timeout: 15000,
         onload: (res) => {
           if (!res || res.status !== 200 || !res.responseText) {
-            console.warn('[APM RPG] update check bad response:', res && res.status);
+            console.warn('[PetRPG] update check bad response:', res && res.status);
             return resolve({ error: 'status ' + (res && res.status), local: LOCAL_VERSION });
           }
           const m = res.responseText.match(/@version\s+([^\s\r\n]+)/);
           if (!m) {
-            console.warn('[APM RPG] no @version in response');
+            console.warn('[PetRPG] no @version in response');
             return resolve({ error: 'no version parsed', local: LOCAL_VERSION });
           }
           updateInfo.checkedAt = Date.now();
@@ -620,20 +540,20 @@
           updateInfo.available = cmpVersion(updateInfo.latest, LOCAL_VERSION) > 0;
           saveUpdateCache();
           if (typeof renderPanel === 'function') renderPanel();
-          vlog('[APM RPG] update check: local=' + LOCAL_VERSION + ' latest=' + updateInfo.latest + ' available=' + updateInfo.available);
+          vlog('[PetRPG] update check: local=' + LOCAL_VERSION + ' latest=' + updateInfo.latest + ' available=' + updateInfo.available);
           resolve({ local: LOCAL_VERSION, latest: updateInfo.latest, available: updateInfo.available });
         },
         onerror: (e) => {
-          console.warn('[APM RPG] update check network error', e);
+          console.warn('[PetRPG] update check network error', e);
           resolve({ error: 'network', local: LOCAL_VERSION });
         },
         ontimeout: () => {
-          console.warn('[APM RPG] update check timeout');
+          console.warn('[PetRPG] update check timeout');
           resolve({ error: 'timeout', local: LOCAL_VERSION });
         }
       });
     } catch (e) {
-      console.warn('[APM RPG] update check exception', e);
+      console.warn('[PetRPG] update check exception', e);
       resolve({ error: String(e), local: LOCAL_VERSION });
     }
   });
@@ -672,7 +592,7 @@
     return ' rpg-' + variant + (needsVariantFallback(pet, variant) ? ' rpg-' + variant + '-fallback' : '');
   };
   // One-shot override: if set to a variant name, the next rollVariant() call
-  // returns it directly and clears the flag. Used by APM_RPG.spawnVariant().
+  // returns it directly and clears the flag. Used by PET_RPG.spawnVariant().
   let _forcedVariant = null;
   const rollVariant = () => {
     if (_forcedVariant) {
@@ -694,95 +614,21 @@
   const isCharacterUnlocked = (c) => state.player.level >= (c.level || 1);
   const isBannerUnlocked    = (b) => state.player.level >= (b.level || 1);
 
-  const detectUsername = () => {
-    // Highest-priority path: EAM renders 'User (ALIAS@AMAZON.COM)' into a toolbar-text div.
-    try {
-      const dbtext = document.querySelector('.x-toolbar-text.dbtext, .dbtext, [id^="tbtext-"]');
-      if (dbtext) {
-        const m = (dbtext.textContent || '').match(/User\s*\(([^)]+)\)/i);
-        if (m && m[1]) return m[1].trim();
-      }
-      // Fallback: scan entire body text for the same pattern
-      const body = document.body && document.body.textContent;
-      if (body) {
-        const m2 = body.match(/User\s*\(([A-Za-z0-9._+\-]+@[A-Za-z0-9.\-]+)\)/);
-        if (m2 && m2[1]) return m2[1].trim();
-      }
-    } catch (e) {}
-    const wins = [];
-    try { wins.push(window); } catch (e) {}
-    try { if (window.top && window.top !== window) wins.push(window.top); } catch (e) {}
-    try { if (window.parent && window.parent !== window) wins.push(window.parent); } catch (e) {}
-    for (const w of wins) {
-      try {
-        const eam = w.EAM && w.EAM.AppData && w.EAM.AppData.getUser && w.EAM.AppData.getUser();
-        if (typeof eam === 'string' && eam) return eam;
-        if (eam && (eam.userCode || eam.userId || eam.id)) return eam.userCode || eam.userId || eam.id;
-        const sess = w.EAM && w.EAM.session && w.EAM.session.user;
-        if (typeof sess === 'string' && sess) return sess;
-        if (sess && (sess.userCode || sess.userId)) return sess.userCode || sess.userId;
-      } catch (e) {}
-    }
-    // Scan same-origin iframes — EAM SDK often lives one frame deep
-    try {
-      const frames = document.querySelectorAll('iframe');
-      for (const iframe of frames) {
-        try {
-          const cw = iframe.contentWindow;
-          if (!cw) continue;
-          const eam = cw.EAM && cw.EAM.AppData && cw.EAM.AppData.getUser && cw.EAM.AppData.getUser();
-          if (typeof eam === 'string' && eam) return eam;
-          if (eam && (eam.userCode || eam.userId || eam.id)) return eam.userCode || eam.userId || eam.id;
-        } catch (e) { /* cross-origin, skip */ }
-      }
-    } catch (e) {}
-    try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        const raw = localStorage.getItem(key);
-        if (!raw) continue;
-        if (raw.indexOf('sessionUserID') === -1 && raw.indexOf('userCode') === -1 && raw.indexOf('userId') === -1) continue;
-        try {
-          const p = JSON.parse(raw);
-          const uid = (p && p.pageData && p.pageData.functionData && p.pageData.functionData.sessionUserID) || (p && p.userCode) || (p && p.userId);
-          if (uid && typeof uid === 'string') return uid;
-        } catch (e2) {}
-      }
-    } catch (e) {}
-    try {
-      const m = (document.cookie || '').match(/(?:^|;\s*)(?:user[_\-]?(?:id|name|alias)|useralias|amzn_user)=([^;]+)/i);
-      if (m) return decodeURIComponent(m[1]);
-    } catch (e) {}
-    return null;
-  };
-  // Turn 'BAIJOSIS@AMAZON.COM' / 'baijosis@amazon.com' / 'baijosis' into 'baijosis'
+  // Username: no site-specific detection. Default to 'trainer' until
+  // the user sets one via PET_RPG.setUsername() or the panel UI.
   const normalizeAlias = (raw) => {
     if (raw == null) return null;
-    const trimmed = String(raw).trim();
-    if (!trimmed) return null;
-    return trimmed.split('@')[0].toLowerCase();
+    const s = String(raw).trim();
+    if (!s) return null;
+    return s.split('@')[0].toLowerCase();
   };
+  const detectUsername = () => null;
   const ensureUsername = () => {
     if (state.player.username) return state.player.username;
-    const alias = normalizeAlias(detectUsername());
-    if (alias) { state.player.username = alias; persistPlayer(); }
+    state.player.username = 'trainer';
+    persistPlayer();
     return state.player.username;
   };
-  // Accept username reports from subframes
-  window.addEventListener('message', (e) => {
-    try {
-      if (!e.data || e.data.__apmRpg !== true) return;
-      if (e.data.type !== 'username' || !e.data.value) return;
-      if (state.player.username) return; // don't overwrite manual choice
-      const alias = normalizeAlias(e.data.value);
-      if (alias) {
-        state.player.username = alias;
-        persistPlayer();
-        if (typeof renderPanel === 'function') renderPanel();
-        vlog('[APM RPG] username set from subframe:', alias);
-      }
-    } catch (err) {}
-  });
 
   // ================================================================
   // ENV
@@ -1132,7 +978,7 @@
       onclick: (e) => {
         if (e && e.preventDefault) e.preventDefault();
         if (e && e.stopPropagation) e.stopPropagation();
-        if (!confirm('Reset ALL APM RPG data?')) return;
+        if (!confirm('Reset ALL PetRPG data?')) return;
         Object.values(K).forEach(deleteRaw);
         safeReload();
       }
@@ -1895,29 +1741,25 @@
     persistPlayer(); renderPanel();
     flashXPGain(amount);
     if (leveled) { flashLevelUp(el.charSlot, 'LEVEL UP! ' + state.player.level); respawnAllRoamers(); }
-    vlog('[APM RPG] +' + amount + ' XP (' + reason + ')');
+    vlog('[PetRPG] +' + amount + ' XP (' + reason + ')');
   };
 
   // ================================================================
-  // NAV DETECTION — hooks XHR, fetch, history.pushState/replaceState,
-  // popstate, and hashchange inside every same-origin frame. XHR/fetch
-  // URLs are classified against EAM_API_URL_RE + EAM_HOST_RE and filtered
-  // through EAM_HEARTBEAT_RE so idle keepalive traffic is ignored.
-  // Every qualifying event rolls a wild spawn (5%) and awards +5 XP
-  // (15%), throttled by NAV_COOLDOWN_MS.
+  // NAV DETECTION — generic hooks that work on any site: pushState /
+  // replaceState monkey-patch, popstate, hashchange, plus a location.href
+  // poll as a fallback for anything that mutates the URL through other paths.
+  // Every qualifying event rolls a wild spawn (2.5%) and awards +5 XP (15%),
+  // throttled by NAV_COOLDOWN_MS across all instances via a shared DOM attr.
   // ================================================================
   const cooldown = { nav: 0 };
-  // canFire: local + cross-instance cooldown. The local (in-memory) portion
-  // prevents rapid re-fires within one script instance. The cross-instance
-  // portion is stored as a data-attribute on document.documentElement, which
-  // is shared by every userscript sandbox on this page — GM storage is
-  // isolated per install, but the DOM is not. Both must clear for the fire
-  // to happen.
+  // canFire: local + cross-instance cooldown. Local (in-memory) prevents rapid
+  // re-fires inside one script; the DOM-attribute half is shared across every
+  // TM install on the page (GM storage is per-install-isolated; DOM is not).
   const canFire = (k, ms) => {
     const now = Date.now();
     if (now - cooldown[k] < ms) return false;
     try {
-      const attr = 'apmRpgFire' + k.charAt(0).toUpperCase() + k.slice(1);
+      const attr = 'petRpgFire' + k.charAt(0).toUpperCase() + k.slice(1);
       const last = parseInt(document.documentElement.dataset[attr], 10) || 0;
       if (now - last < ms) return false;
       document.documentElement.dataset[attr] = String(now);
@@ -1930,64 +1772,18 @@
 
   const handleNavActivity = (source) => {
     if (!canFire('nav', NAV_COOLDOWN_MS)) return;
-    vlog('[APM RPG] nav activity via', source);
+    vlog('[PetRPG] nav activity via', source);
     setTimeout(rollWildSpawn, 500);
     if (Math.random() < PAGE_CHANGE_XP_CHANCE) {
       grantPlayerXP(XP_REWARDS.pageChange, 'page change');
     }
   };
 
-  // Fire handleNavActivity on any EAM-origin XHR/fetch that isn't a heartbeat.
-  // Match by both path regex and host regex (for relative screen codes).
-  const classifyUrlForNav = (url) => {
-    if (!url) return;
-    const raw = String(url);
-    if (EAM_HEARTBEAT_RE.test(raw)) return;
-    const abs = resolveUrl(raw);
-    const host = hostOf(abs);
-    if (EAM_API_URL_RE.test(abs) || EAM_HOST_RE.test(host)) {
-      handleNavActivity('eam-xhr');
-    }
-  };
-
-  const installXHRHook = () => {
-    try {
-      const proto = rpgRawWin.XMLHttpRequest && rpgRawWin.XMLHttpRequest.prototype;
-      if (!proto || proto.__apmRpgHooked) return;
-      const origOpen = proto.open;
-      const origSend = proto.send;
-      proto.open = function(method, url) {
-        try { this.__apmRpgUrl = String(url || ''); } catch (e) {}
-        return origOpen.apply(this, arguments);
-      };
-      proto.send = function() {
-        const url = this.__apmRpgUrl || '';
-        this.addEventListener('load', () => classifyUrlForNav(url), { once: true });
-        return origSend.apply(this, arguments);
-      };
-      proto.__apmRpgHooked = true;
-    } catch (e) {}
-  };
-
-  const installFetchHook = () => {
-    try {
-      if (rpgRawWin.__apmRpgFetchHooked) return;
-      const origFetch = rpgRawWin.fetch;
-      if (typeof origFetch !== 'function') return;
-      rpgRawWin.fetch = function(input) {
-        const url = (typeof input === 'string') ? input : (input && input.url) || '';
-        return origFetch.apply(this, arguments).then((resp) => {
-          if (resp && resp.ok !== false) classifyUrlForNav(url);
-          return resp;
-        }, (err) => { throw err; });
-      };
-      rpgRawWin.__apmRpgFetchHooked = true;
-    } catch (e) {}
-  };
-
+  // pushState/replaceState monkey-patch — universal SPA hook. Install at
+  // document-start so we wrap the originals before the page's own scripts do.
   const installHistoryHook = () => {
     try {
-      if (rpgRawWin.__apmRpgHistoryHooked) return;
+      if (rpgRawWin.__petRpgHistoryHooked) return;
       const hist = rpgRawWin.history;
       if (!hist) return;
       for (const m of ['pushState', 'replaceState']) {
@@ -1999,17 +1795,26 @@
           return r;
         };
       }
-      rpgRawWin.__apmRpgHistoryHooked = true;
+      rpgRawWin.__petRpgHistoryHooked = true;
     } catch (e) {}
   };
 
   window.addEventListener('hashchange', () => handleNavActivity('hashchange'));
   window.addEventListener('popstate',   () => handleNavActivity('popstate'));
 
-  // Install hooks immediately at document-start so we intercept XHR/fetch/
-  // pushState/replaceState BEFORE the page's own scripts capture the originals.
-  try { installXHRHook(); } catch (e) {}
-  try { installFetchHook(); } catch (e) {}
+  // Fallback poll for SPAs that mutate the URL without pushState/replaceState.
+  // 2s cadence keeps CPU cost trivial; canFire's cooldown swallows duplicates
+  // when pushState + poll both fire.
+  let _petRpgLastUrl = location.href;
+  setInterval(() => {
+    try {
+      if (location.href !== _petRpgLastUrl) {
+        _petRpgLastUrl = location.href;
+        handleNavActivity('url-poll');
+      }
+    } catch (e) {}
+  }, 2000);
+
   try { installHistoryHook(); } catch (e) {}
 
   // ================================================================
@@ -2869,7 +2674,7 @@
     document.body.appendChild(wildEl);
     requestAnimationFrame(() => requestAnimationFrame(moveWild));
     wildRoamTimer = setInterval(moveWild, 3000);
-    vlog('[APM RPG] Wild ' + (special ? (variantLabel(wildVariant).toUpperCase() + ' ') : '') + wildPet.name + ' appeared!');
+    vlog('[PetRPG] Wild ' + (special ? (variantLabel(wildVariant).toUpperCase() + ' ') : '') + wildPet.name + ' appeared!');
   };
 
   const despawnWild = () => {
@@ -3008,11 +2813,11 @@
     const greet = uname ? ('Welcome, ' + uname + '! ') : 'Welcome! ';
     const modal = $('div', { class: 'rpg-modal rpg-howto-modal' });
     const inner = $('div', { class: 'rpg-modal-inner' });
-    inner.appendChild($('img', { class: 'rpg-howto-logo', src: IMG_BASE + '/icon.png', alt: 'APM RPG' }));
+    inner.appendChild($('img', { class: 'rpg-howto-logo', src: IMG_BASE + '/icon.png', alt: 'PetRPG' }));
     inner.appendChild($('h3', { html: 'HOW TO PLAY', style: { margin: '0 0 4px', color: '#ffd166' } }));
     inner.appendChild($('div', {
       class: 'rpg-howto-body',
-      html: greet + 'APM RPG runs quietly in the background while you work. Every time you navigate around EAM, you have a chance to earn <b>XP</b> and to spot a <b>wild pet</b> drifting across your screen \u2014 click one to try to catch it. Level up to unlock <b>extra pet slots</b>, <b>new character portraits</b>, and <b>new banners</b>. That\u2019s it. Get to work!'
+      html: greet + 'PetRPG runs quietly in the background while you browse. Every time you navigate around, you have a chance to earn <b>XP</b> and to spot a <b>wild pet</b> drifting across your screen \u2014 click one to try to catch it. Level up to unlock <b>extra pet slots</b>, <b>new character portraits</b>, and <b>new banners</b>. That\u2019s it. Enjoy!'
     }));
     const btn = $('button', {
       class: 'rpg-howto-btn',
@@ -3035,7 +2840,7 @@
   };
 
   const boot = () => {
-    console.log('[APM RPG] v' + LOCAL_VERSION + ' loaded');
+    console.log('[PetRPG] v' + LOCAL_VERSION + ' loaded');
     setupMultiTabSync();
     bumpInstalledVersion();
     loadUpdateCache();

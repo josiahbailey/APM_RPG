@@ -1,8 +1,8 @@
-# APM RPG
+# PetRPG
 
-> A quiet RPG layer for Amazon's EAM / APM. Level up while you work, catch pets between clicks, and chase rare variants that appear once in a thousand spawns.
+> A quiet RPG layer for your browser. Level up while you browse, catch pets between clicks, and chase rare variants that appear once in a thousand spawns.
 
-A Tampermonkey userscript that overlays a lightweight RPG panel on top of EAM (Enterprise Asset Management) and PTP web interfaces. Navigating around the app grants XP; leveling up unlocks characters, banners, and pet slots. Wild pets appear on the page for you to catch, with rare variants (Shiny, Hollow, Rainbow) and per-variant celebration effects.
+A Tampermonkey userscript that overlays a lightweight RPG panel on top of any web page. Navigating around the page grants XP; leveling up unlocks characters, banners, and pet slots. Wild pets appear on the page for you to catch, with rare variants (Shiny, Hollow, Rainbow) and per-variant celebration effects.
 
 Zero backend. All state lives in Tampermonkey's storage, scoped to your browser profile.
 
@@ -16,21 +16,17 @@ Zero backend. All state lives in Tampermonkey's storage, scoped to your browser 
    https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/apm-rpg.user.js
    ```
 3. Tampermonkey shows an install prompt. Click **Install**.
-4. Open an EAM / APM / PTP tab. The RPG panel appears at the bottom-right.
+4. Open any tab. The RPG panel appears at the bottom-right.
 
-Updates are automatic: Tampermonkey polls the raw URL on its own schedule, and the script itself does a rate-limited check every 5 minutes. When a newer version exists, a small pulsing **UPDATE →** button appears next to the panel; clicking it opens the raw URL so Tampermonkey can install the diff. The button also hides when the panel is collapsed.
+Updates are automatic: Tampermonkey polls the raw URL on its own schedule, and the script itself does a rate-limited check every 5 minutes. When a newer version exists, a small pulsing **UPDATE →** button appears next to the panel; clicking it opens the raw URL so Tampermonkey can install the diff.
 
-## Supported hosts
+## Where it runs
 
-- `*.eam.hxgnsmartcloud.com`
-- `*.sso.eam.hxgnsmartcloud.com`
-- `*.eam.aws.a2z.com`
-- `*.ptp.amazon.dev`
-- `*.insights.amazon.dev`
+Every site (`*://*/*`). The script runs only in the top frame and stays entirely client-side; no data leaves your browser.
 
 ## How to play
 
-APM RPG runs quietly in the background while you work. Every time you navigate around EAM, you have a chance to earn **XP** and to spot a **wild pet** drifting near the bottom-right of your screen — click it to try to catch it. Level up to unlock extra pet slots, new character portraits, and new banners. That's it. Get to work.
+PetRPG runs quietly in the background while you browse. Every time you navigate around, you have a chance to earn **XP** and to spot a **wild pet** drifting near the bottom-right of your screen — click it to try to catch it. Level up to unlock extra pet slots, new character portraits, and new banners.
 
 ## Earning XP
 
@@ -38,21 +34,18 @@ XP comes from two sources:
 
 | Source | XP | Trigger |
 |---|---:|---|
-| **Nav activity** | 5 | 15% chance per SPA nav event (see below) |
+| **Nav activity** | 5 | 15% chance per nav event (see below) |
 | **Catch a wild pet** | 5 – 500 | Rarity-scaled, see rarity table |
 
 XP required to reach level *n* is `floor(100 * n^1.35)`, so climbing gets steadily slower.
 
 ### What counts as "nav activity"?
 
-EAM is a same-origin-iframe SPA that rarely uses `pushState`. The script hooks four navigation signals inside every same-origin frame:
+The script hooks three navigation signals in every page:
 
-- `XMLHttpRequest` calls to any host on `*.eam.hxgnsmartcloud.com`, `*.eam.aws.a2z.com`, `*.ptp.amazon.dev`, or `*.insights.amazon.dev`
-- The same, over `fetch()`
-- `history.pushState` / `replaceState`
+- `history.pushState` / `replaceState` (universal SPA hook)
 - `popstate` and `hashchange` events
-
-Heartbeat / session-keepalive endpoints (`SESSION`, `BSFOOTR`, `KEEPALIVE`, `BSTIMR`, `IDLTIMR`) are filtered out so idle tabs don't grind XP.
+- A 2 s poll of `location.href` as a fallback for anything that mutates the URL through other paths
 
 A 2 s cooldown prevents burst navigations from double-counting. Each qualifying event rolls a 15% chance to grant XP and independently rolls a wild-spawn check.
 
@@ -62,10 +55,8 @@ Wild pets spawn on page load and on qualifying nav events, at a 2.5% roll each t
 
 - Picks a pet using weighted-random selection (see rarity table)
 - Independently rolls for a Shiny / Hollow / Rainbow variant
-- Places the pet in the circular roam zone anchored at the bottom-right corner (radius ~34% of the shorter viewport axis)
+- Places the pet in the circular roam zone anchored at the bottom-right corner
 - Gives you **3 catch attempts** — each click rolls against the pet's base catch rate
-
-Catch rate is uniform across variants; rarity affects only spawn chance and XP reward.
 
 ### Rarity table
 
@@ -76,8 +67,6 @@ Catch rate is uniform across variants; rarity affects only spawn chance and XP r
 | Epic | 10 | 25% | 50 | 5 |
 | Legendary | 4 | 20% | 150 | 4 |
 | Ancient | 1 | 15% | 500 | 2 |
-
-Each pet in a rarity gets that spawn weight, so 10 Commons at weight 60 each (600 total) vs. 2 Ancients at weight 1 each (2 total) out of 843 grand total means Commons hit ~71% of spawns and Ancients ~0.24%.
 
 ### Variant table
 
@@ -90,20 +79,9 @@ Every wild spawn independently rolls for a variant, cascading rarest first:
 | Shiny | 1% (1 in 100) | Gold star badge, particles, chime |
 | Normal | 98.4% | Base sparkle only |
 
-Variants are cosmetic overrides of any base pet and are tracked independently in the Dex.
-
 ## Nature Reserve
 
-Released pets accumulate in a **Nature Reserve** panel attached to the left side of the pet-selection inventory. The panel shows a row of 5 slots for the first 5 released pets (sprites shown, variant-aware). Each release plays a small walk-into-the-reserve animation and increments a `count / 5` meter. When the meter hits 5, the *Summon Pet* button turns green, pulses slowly, and lets you conjure a wild pet on demand.
-
-Reserve summons use a rarity-boosted weight table (only applies to Reserve summons; normal wild spawns keep the base weights):
-
-- Rare, Epic, Legendary, and Ancient per-pet weights are multiplied by 1.5
-- Common per-pet weight is scaled down so the overall total still equals the base spawn total
-
-Releasing more than 5 pets before summoning stores the surplus (the meter can read `8 / 5`, etc.); the extras start filling the row once a summon consumes the visible batch.
-
-If a wild pet is already on screen when you press *Summon*, the release counter is preserved and the summon is skipped. Otherwise 5 releases are consumed, the pet is summoned with a bouncy scale-in from the reserve, and a rarity-colored toast confirms which pet arrived.
+Released pets accumulate in a **Nature Reserve** panel attached to the left side of the pet-selection inventory. Each release plays a small walk-into-the-reserve animation and increments a `count / 5` meter. When the meter hits 5, the *Summon Pet* button turns green and lets you conjure a wild pet on demand.
 
 ## Unlock ladder
 
@@ -115,68 +93,29 @@ If a wild pet is already on screen when you press *Summon*, the release counter 
 | 2 | Lv 5 |
 | 3 | Lv 10 |
 
-Each unlocked slot spawns a roamer that drifts around the page. Empty slots stay dark until you assign a pet.
-
 ### Characters
 
-The first three portraits are Lv 1 starters. The rest step up by 2 levels each:
-
-| Portraits | Level |
-|---|---:|
-| Character 1, 2, 3 | 1 |
-| Character 4 | 3 |
-| Character 5 | 5 |
-| Character 6 | 7 |
-| Character 7 | 9 |
-| Character 8 | 11 |
-| Character 9 | 13 |
-| Character 10 | 15 |
-| Character 11 | 17 |
-| Character 12 | 19 |
-| Character 13 | 21 |
-| Character 14 | 23 |
+The first three portraits are Lv 1 starters. The rest step up by 2 levels each: Character 4 at Lv 3, Character 5 at Lv 5, ... Character 14 at Lv 23.
 
 ### Banners
 
-| Banner | Level |
-|---|---:|
-| None | 1 |
-| Banner_1 | 3 |
-| Banner_2 | 6 |
-| Banner_3 | 9 |
-| Banner_4 | 12 |
-| Banner_5 | 15 |
-| Banner_6 | 18 |
-| Banner_7 | 21 |
-| Banner_8 | 24 |
-| Banner_9 | 27 |
-| Banner_10 | 30 |
-
-## Starter selection & how-to modal
-
-On first install, you pick one of three starter pets (Mossmo, Sizzly, Ribub). Once chosen, a one-paragraph "How to Play" modal appears. Both are guarded by storage flags, so they show exactly once per browser profile — reset your state (below) to see them again.
+Banner_1 unlocks at Lv 3, then one new banner every 3 levels: Banner_10 at Lv 30.
 
 ## Panel
 
 The panel sits at the bottom-right and holds:
 
-- Character portrait, username, XP bar, and level
+- Character portrait, username (defaults to `trainer` — click the panel to change), XP bar, and level
 - Three pet slots (locked slots show `Lv N`)
-- A collapse tab on the left edge — click to slide the panel off-screen behind a thin strip
-- A **Dex** button that opens the full pet index — species counter, variant badges, and per-pet lifetime catch count that survives releases
+- A collapse tab on the left edge
+- A **Dex** button that opens the full pet index
 - An update button that pulses green when a newer version is available
-
-Clicking the portrait opens the customize menu (character + banner sliders). Clicking a pet slot opens the pet swap menu for that slot.
 
 ## Compatibility
 
 - Chromium, Firefox, Safari — anywhere Tampermonkey runs
 - Tampermonkey 4.13+ recommended for `GM_xmlhttpRequest` + `@connect`
 
-## Support
-
-Ping @baijosis or open an issue on the repo.
-
 ## License
 
-Personal project. Not affiliated with the EAM/APM teams.
+Personal project.
