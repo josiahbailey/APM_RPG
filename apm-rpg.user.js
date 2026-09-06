@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PetRPG
 // @namespace    https://github.com/josiahbailey/PetRPG
-// @version      2.0.0
+// @version      2.0.2
 // @description  Collect and level up roaming pets while you browse.
 // @author       baijosis
 // @icon         https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/icon.png
@@ -197,6 +197,7 @@
     installedVersion: 'petrpg_installed_version_v1',
     updateCache: 'petrpg_update_v1',
     v1_player: 'petrpg_player_v1', v1_pets: 'petrpg_pets_v1', v1_equip: 'petrpg_equip_v1',
+    apmMigrated: 'petrpg_apm_bridge_migrated_v1',
   };
   const _devSink = {};
   const readRaw  = (k) => DEV_MODE ? (_devSink[k] || null) : GM_getValue(k, null);
@@ -639,7 +640,7 @@
   // ================================================================
   GM_addStyle([
     '.rpg-root,.rpg-root *{box-sizing:border-box;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}',
-    '.rpg-panel-wrap{position:fixed;right:16px;bottom:16px;z-index:2147483000;display:flex;align-items:stretch;transition:transform 320ms cubic-bezier(0.4,0,0.2,1)}',
+    '.rpg-panel-wrap{font-size:13px;line-height:1.4;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;position:fixed;right:16px;bottom:16px;z-index:2147483000;display:flex;align-items:stretch;transition:transform 320ms cubic-bezier(0.4,0,0.2,1)}',
     '.rpg-panel-wrap.rpg-collapsed{transform:translateX(calc(100% - 16px))}',
     '.rpg-panel-tab{width:26px;align-self:stretch;margin-right:-6px;background:rgba(20,20,28,0.65);color:#ffd166;border:1px solid #3b3b48;border-right:none;border-radius:8px 0 0 8px;cursor:pointer;writing-mode:vertical-rl;text-orientation:mixed;display:flex;align-items:center;justify-content:center;font-weight:800;letter-spacing:3px;font-size:12px;user-select:none;transition:background 150ms,color 150ms;backdrop-filter:blur(2px);box-shadow:-3px 0 8px rgba(0,0,0,0.3)}',
     '.rpg-panel-tab:hover{background:rgba(40,40,55,0.75);color:#fff}',
@@ -649,7 +650,7 @@
     '.rpg-hide-btn{padding:2px 6px;font-size:9px;font-weight:700;border:1px solid #444;border-radius:4px;background:#22222c;color:#999;cursor:pointer;letter-spacing:0.3px;text-transform:uppercase}.rpg-hide-btn:hover{background:#2f2f3b;color:#ddd;border-color:#555}',
     '.rpg-slot{width:'+PORTRAIT_PX+'px;height:'+PORTRAIT_PX+'px;border-radius:8px;background:#111;border:2px solid #4b4b5c;overflow:hidden;cursor:pointer;display:flex;align-items:center;justify-content:center;position:relative;flex-shrink:0}',
     '.rpg-slot img{width:100%;height:100%;object-fit:cover;display:block}',
-    '.rpg-slot.pet{width:'+PET_ICON_PX+'px;height:'+PET_ICON_PX+'px}',
+    '.rpg-slot.rpg-pet-slot{width:'+PET_ICON_PX+'px;height:'+PET_ICON_PX+'px}',
     '.rpg-slot .rpg-slot-badge{position:absolute;bottom:0;left:0;right:0;font-size:10px;background:rgba(0,0,0,0.7);text-align:center;padding:1px 2px}',
     '.rpg-stats{min-width:140px;position:relative;display:flex;flex-direction:column;gap:2px}',
     '.rpg-stat-row{display:flex;align-items:center;justify-content:space-between;gap:8px}',
@@ -669,26 +670,26 @@
     '.rpg-reset-btn{font-size:9px;padding:3px 7px;background:rgba(40,0,0,0.8);color:#f77;border:1px solid #633;border-radius:4px;cursor:pointer;opacity:0.7}.rpg-reset-btn:hover{opacity:1;background:#400}',
     '.rpg-help-btn{font-size:9px;padding:3px 7px;background:rgba(40,30,0,0.8);color:#fd7;border:1px solid #663;border-radius:4px;cursor:pointer;opacity:0.7}.rpg-help-btn:hover{opacity:1;background:#420}',
     '.rpg-slack-btn{font-size:9px;padding:3px 7px;background:rgba(74,21,75,0.8);color:#ecb22e;border:1px solid #b48a20;border-radius:4px;cursor:pointer;opacity:0.7}.rpg-slack-btn:hover{opacity:1;background:#611f69}',
-    '.rpg-corner-wrap{position:fixed;left:0;bottom:12px;z-index:2147483000;display:flex;align-items:stretch;transition:transform 320ms cubic-bezier(0.4,0,0.2,1)}',
+    '.rpg-corner-wrap{font-size:13px;line-height:1.4;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;position:fixed;left:0;bottom:12px;z-index:2147483000;display:flex;align-items:stretch;transition:transform 320ms cubic-bezier(0.4,0,0.2,1)}',
     '.rpg-corner-wrap.rpg-collapsed{transform:translateX(calc(-100% + 18px))}',
     '.rpg-corner-tools{display:flex;gap:5px;padding:4px 8px;align-items:center;background:rgba(20,20,28,0.4);border:1px solid #3b3b48;border-left:none;border-radius:0 8px 8px 0;backdrop-filter:blur(2px)}',
     '.rpg-corner-tab{width:18px;align-self:stretch;margin-left:-6px;padding:6px 2px;background:rgba(20,20,28,0.4);color:#b8a06a;border:1px solid #3b3b48;border-left:none;border-radius:0 8px 8px 0;cursor:pointer;writing-mode:vertical-rl;text-orientation:mixed;display:flex;align-items:center;justify-content:center;font-weight:700;letter-spacing:1.5px;font-size:5.5px;user-select:none;transition:background 150ms,color 150ms;backdrop-filter:blur(2px);box-shadow:3px 0 8px rgba(0,0,0,0.3)}',
     '.rpg-corner-tab:hover{background:rgba(20,20,28,0.8);color:#e8d4a0}',
     '.rpg-update-toast{position:fixed;right:16px;bottom:120px;z-index:2147483001;padding:4px 10px;font-size:10px;font-weight:800;letter-spacing:0.4px;border-radius:6px;cursor:pointer;background:linear-gradient(135deg,#22c55e,#15803d);color:#fff;border:1px solid #16a34a;box-shadow:0 2px 8px rgba(34,197,94,0.35);animation:rpgUpdatePulse 2s ease-in-out infinite;transition:transform 0.15s ease}.rpg-update-toast:hover{filter:brightness(1.15);transform:translateY(-1px)}.rpg-update-toast:active{transform:translateY(0)}',
     '@keyframes rpgUpdatePulse{0%,100%{box-shadow:0 2px 8px rgba(34,197,94,0.35)}50%{box-shadow:0 2px 10px rgba(34,197,94,0.7),0 0 0 4px rgba(34,197,94,0.12)}}',
-    '.rpg-menu{position:fixed;right:16px;bottom:110px;z-index:2147483001;background:rgba(20,20,28,0.97);border:1px solid #3b3b48;border-radius:12px;padding:12px;color:#eee;max-width:380px;max-height:60vh;overflow-y:auto;box-shadow:0 10px 30px rgba(0,0,0,0.6)}',
+    '.rpg-menu{font-size:13px;line-height:1.4;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;position:fixed;right:16px;bottom:110px;z-index:2147483001;background:rgba(20,20,28,0.97);border:1px solid #3b3b48;border-radius:12px;padding:12px;color:#eee;max-width:380px;max-height:60vh;overflow-y:auto;box-shadow:0 10px 30px rgba(0,0,0,0.6)}',
     '.rpg-menu h4{margin:0 0 8px;font-size:12px;color:#ffd166}',
     '.rpg-menu-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}',
     '.rpg-menu-char{text-align:center;cursor:pointer;padding:4px;border-radius:6px}.rpg-menu-char:hover{background:#2a2a36}.rpg-menu-char.active{outline:2px solid #ffd166}',
     '.rpg-menu-char img{width:56px;height:56px;object-fit:cover;border-radius:6px;display:block}',
     '.rpg-menu-item{text-align:center;cursor:pointer;padding:6px 4px;border-radius:6px}.rpg-menu-item:hover{background:#2a2a36}.rpg-menu-item.active{background:#33334a;outline:1px solid #ffd166}',
     '.rpg-menu-item img{width:52px;height:52px;object-fit:cover;border-radius:6px;display:block;margin:0 auto}',
-    '.rpg-menu-item .n{font-size:11px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
-    '.rpg-menu-item .l{font-size:10px;color:#ffd166}',
+    '.rpg-menu-item .rpg-n{font-size:11px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '.rpg-menu-item .rpg-l{font-size:10px;color:#ffd166}',
     '.rpg-empty-msg{font-size:12px;color:#888;padding:12px 0}',
     '.rpg-dex{max-width:620px;width:calc(100vw - 40px);text-align:left;padding:26px 32px}',
     '.rpg-dex-list{max-height:55vh;overflow-y:auto}',
-    '.rpg-roam{position:fixed;z-index:2147482900;pointer-events:auto;cursor:pointer;transition:left 10s linear,top 10s linear}',
+    '.rpg-roam{font-size:13px;line-height:1.4;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;position:fixed;z-index:2147482900;pointer-events:auto;cursor:pointer;transition:left 10s linear,top 10s linear}',
     '.rpg-roam.rpg-grabbed,.rpg-roam.rpg-tossing{transition:none!important}',
     '.rpg-roam.rpg-grabbed{cursor:grabbing;z-index:2147482950}',
     '.rpg-roam.rpg-grabbed img{animation:rpgRoamWiggle 300ms ease-in-out infinite alternate}',
@@ -696,8 +697,8 @@
     '.rpg-roam.rpg-poking img{animation:rpgRoamPoke 480ms cubic-bezier(0.36,0.07,0.19,0.97) both}',
     '@keyframes rpgRoamPoke{0%{transform:rotate(0) scale(1)}18%{transform:rotate(-12deg) scale(1.08)}36%{transform:rotate(10deg) scale(1.05)}54%{transform:rotate(-6deg) scale(1.03)}72%{transform:rotate(4deg) scale(1.01)}100%{transform:rotate(0) scale(1)}}',
     '.rpg-roam img{width:calc(64px * var(--rpg-scale, 1));height:calc(64px * var(--rpg-scale, 1));object-fit:contain;filter:drop-shadow(0 4px 6px rgba(0,0,0,0.4))}',
-    '.rpg-roam .label{font-size:11px;text-align:center;color:#fff;text-shadow:0 1px 2px #000,0 0 4px #000}',
-    '.rpg-wild{position:fixed;z-index:2147483100;cursor:pointer;transition:left 3s linear,top 3s linear,transform 300ms;text-align:center}',
+    '.rpg-roam .rpg-nametag{font-size:11px;text-align:center;color:#fff;text-shadow:0 1px 2px #000,0 0 4px #000}',
+    '.rpg-wild{font-size:13px;line-height:1.4;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;position:fixed;z-index:2147483100;cursor:pointer;transition:left 3s linear,top 3s linear,transform 300ms;text-align:center}',
     '.rpg-pet-sprite{position:relative;display:inline-block;line-height:0}',
     // ── Reflective-film overlay (hollow + rainbow variants) ──
     // ::after is a gradient masked to the pet's alpha channel (via --rpg-pet-mask, set inline per-instance),
@@ -707,12 +708,12 @@
     '.rpg-rainbow .rpg-pet-sprite::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(135deg,#ff5555,#ffaa00,#ffff55,#55ff77,#55ccff,#aa66ff,#ff66cc,#ff5555);background-size:300% 300%;animation:rpgRainbowFilm 7s linear infinite;-webkit-mask-image:var(--rpg-pet-mask);mask-image:var(--rpg-pet-mask);-webkit-mask-size:contain;mask-size:contain;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;-webkit-mask-mode:alpha;mask-mode:alpha;opacity:0.55;mix-blend-mode:color}',
     '@keyframes rpgRainbowFilm{0%{background-position:0% 0%}100%{background-position:300% 300%}}',
     '.rpg-wild img{width:calc(96px * var(--rpg-scale, 1));height:calc(96px * var(--rpg-scale, 1));object-fit:contain;filter:drop-shadow(0 0 12px var(--rpg-rarity-color, gold))}',
-    '.rpg-wild .label{text-align:center;font-size:12px;color:var(--rpg-rarity-color, gold);text-shadow:0 1px 2px #000,0 0 4px #000;font-weight:700}',
+    '.rpg-wild .rpg-nametag{text-align:center;font-size:12px;color:var(--rpg-rarity-color, gold);text-shadow:0 1px 2px #000,0 0 4px #000;font-weight:700}',
     '@keyframes rpgLevelUp{0%{transform:scale(1);filter:brightness(1)}30%{transform:scale(1.4);filter:brightness(2) drop-shadow(0 0 12px gold)}100%{transform:scale(1);filter:brightness(1)}}',
     '.rpg-levelup-anim{animation:rpgLevelUp 900ms ease-out}',
     '.rpg-levelup-toast{position:fixed;left:50%;top:30%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.85);color:gold;font-size:22px;font-weight:800;padding:12px 20px;border-radius:10px;border:2px solid gold;z-index:2147483200;pointer-events:none;animation:rpgLevelUp 1200ms ease-out}',
     '.rpg-catch-toast{position:fixed;left:50%;top:30%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.88);color:var(--rpg-rarity-color, gold);font-size:20px;font-weight:800;padding:12px 22px;border-radius:10px;border:2px solid var(--rpg-rarity-color, gold);box-shadow:0 0 24px var(--rpg-rarity-color, gold);z-index:2147483200;pointer-events:none;animation:rpgLevelUp 1600ms ease-out;text-align:center;line-height:1.4}',
-    '.rpg-modal{position:fixed;inset:0;z-index:2147483400;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center}',
+    '.rpg-modal{font-size:13px;line-height:1.4;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;position:fixed;inset:0;z-index:2147483400;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center}',
     '.rpg-modal-inner{background:#1a1a24;color:#eee;padding:22px 26px;border-radius:12px;border:2px solid gold;text-align:center;max-width:340px;position:relative}',
     '.rpg-modal-close{position:absolute;top:10px;right:10px;width:26px;height:26px;border-radius:50%;background:rgba(120,120,140,0.18);color:#bbb;font-size:16px;font-weight:900;display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;line-height:1;z-index:5;padding:0;margin:0;transition:background 150ms,color 150ms,transform 150ms}.rpg-modal-close:hover{background:#dc2626;color:#fff;transform:scale(1.1)}',
     '.rpg-modal-inner button{margin-top:14px;padding:8px 16px;background:gold;color:#111;border:none;border-radius:6px;font-weight:700;cursor:pointer}',
@@ -725,7 +726,7 @@
     '.rpg-wild.rpg-catchable{cursor:pointer}',
     '.rpg-wild.rpg-catchable .rpg-pet-sprite::before{content:"";position:absolute;left:50%;top:50%;width:calc(130px * var(--rpg-catch-scale, 1));height:calc(130px * var(--rpg-catch-scale, 1));margin:calc(-65px * var(--rpg-catch-scale, 1)) 0 0 calc(-65px * var(--rpg-catch-scale, 1));border:3px dashed var(--rpg-rarity-color, gold);border-radius:50%;pointer-events:none;box-sizing:border-box;animation:rpgRingSpin 4s linear infinite;opacity:0.85}',
     '@keyframes rpgRingSpin{to{transform:rotate(360deg)}}',
-    '.rpg-wild .catch-hint{text-align:center;color:var(--rpg-rarity-color, gold);font-weight:800;font-size:14px;text-shadow:0 1px 2px #000,0 0 6px #000;margin-bottom:6px;letter-spacing:2px;animation:rpgCatchBounce 900ms ease-in-out infinite alternate}',
+    '.rpg-wild .rpg-catch-hint{text-align:center;color:var(--rpg-rarity-color, gold);font-weight:800;font-size:14px;text-shadow:0 1px 2px #000,0 0 6px #000;margin-bottom:6px;letter-spacing:2px;animation:rpgCatchBounce 900ms ease-in-out infinite alternate}',
     '@keyframes rpgCatchBounce{from{transform:translateY(0);opacity:0.85}to{transform:translateY(-4px);opacity:1}}',
     '.rpg-wild-shake{animation:rpgWildShake 380ms ease-in-out!important}',
     '.rpg-fail-catch{position:absolute;top:-18px;left:50%;color:#ef4444;font-weight:800;font-size:13px;text-shadow:0 1px 2px #000,0 0 6px #000;letter-spacing:0.5px;white-space:nowrap;pointer-events:none;animation:rpgFailCatch 1400ms ease-out forwards}',
@@ -735,7 +736,7 @@
     '@keyframes rpgCaughtPoof{0%{transform:scale(1);opacity:1}60%{transform:scale(1.4);opacity:0.8}100%{transform:scale(0.05);opacity:0}}',
     // ── Multi-slot pets, banners, sliders, locks ──────────────────
     '.rpg-slot-container{gap:6px}',
-    '.rpg-slot.pet{width:44px;height:44px}',
+    '.rpg-slot.rpg-pet-slot{width:44px;height:44px}',
     '.rpg-slot.pet .rpg-slot-badge{font-size:9px;letter-spacing:0.2px}',
     '.rpg-slot-locked{background:#151520;border-color:#333;cursor:not-allowed;display:flex;align-items:center;justify-content:center}',
     '.rpg-lock-label{font-size:11px;font-weight:700;color:#666;letter-spacing:0.5px}',
@@ -770,8 +771,8 @@
     '.rpg-starter-card{background:#1e1e2e;border-radius:10px;padding:14px 12px;cursor:pointer;transition:transform 200ms,box-shadow 200ms,border-color 200ms;width:110px;border:1.5px solid #2a2a36}',
     '.rpg-starter-card:hover{transform:translateY(-4px);box-shadow:0 8px 22px rgba(255,209,102,0.35);border-color:#ffd166}',
     '.rpg-starter-card img{width:76px;height:76px;object-fit:cover;border-radius:8px;display:block;margin:0 auto}',
-    '.rpg-starter-card .n{font-size:13px;font-weight:700;margin-top:8px;text-align:center;color:#ffd166}',
-    '.rpg-starter-card .r{font-size:10px;color:#aaa;text-align:center;margin-top:2px;letter-spacing:0.5px;text-transform:uppercase}',
+    '.rpg-starter-card .rpg-n{font-size:13px;font-weight:700;margin-top:8px;text-align:center;color:#ffd166}',
+    '.rpg-starter-card .rpg-r{font-size:10px;color:#aaa;text-align:center;margin-top:2px;letter-spacing:0.5px;text-transform:uppercase}',
     // ── Hollow variant (silvery reflective chrome) ──────────────
     '.rpg-hollow img{filter:brightness(1.22) contrast(1.15) saturate(0.65) drop-shadow(0 0 6px #dbeafe) drop-shadow(0 0 14px #94a3b8)}',
     '.rpg-hollow-fallback img{filter:grayscale(0.65) brightness(1.3) contrast(1.2) saturate(0.5) hue-rotate(180deg) drop-shadow(0 0 6px #e0e7ff) drop-shadow(0 0 14px #94a3b8)!important}',
@@ -785,19 +786,19 @@
     // ── Unified wild pulse (any special variant) ─────────────────
     '.rpg-wild-special img{animation:rpgWildPulse 900ms ease-in-out infinite alternate}',
     // ── Variant-themed wild overrides (shiny/hollow/rainbow) ────
-    '.rpg-wild.rpg-shiny .label{animation:rpgWildShinyText 3s linear infinite;text-shadow:0 1px 2px #000,0 0 6px #facc15;font-weight:800}',
+    '.rpg-wild.rpg-shiny .rpg-nametag{animation:rpgWildShinyText 3s linear infinite;text-shadow:0 1px 2px #000,0 0 6px #facc15;font-weight:800}',
     '.rpg-wild.rpg-shiny.rpg-catchable .rpg-pet-sprite::before{animation:rpgRingSpin 4s linear infinite,rpgWildShinyRing 3s linear infinite;box-shadow:0 0 14px #facc15,inset 0 0 8px rgba(250,204,21,0.35);background:radial-gradient(circle,rgba(255,229,150,0.22) 0%,rgba(255,229,150,0.08) 55%,transparent 75%)}',
-    '.rpg-wild.rpg-shiny .catch-hint{animation:rpgCatchBounce 900ms ease-in-out infinite alternate,rpgWildShinyText 3s linear infinite;text-shadow:0 1px 2px #000,0 0 10px #facc15}',
-    '.rpg-wild.rpg-hollow .label{animation:rpgWildHollowText 3s linear infinite;text-shadow:0 1px 2px #000,0 0 6px #94a3b8;font-weight:800}',
+    '.rpg-wild.rpg-shiny .rpg-catch-hint{animation:rpgCatchBounce 900ms ease-in-out infinite alternate,rpgWildShinyText 3s linear infinite;text-shadow:0 1px 2px #000,0 0 10px #facc15}',
+    '.rpg-wild.rpg-hollow .rpg-nametag{animation:rpgWildHollowText 3s linear infinite;text-shadow:0 1px 2px #000,0 0 6px #94a3b8;font-weight:800}',
     '.rpg-wild.rpg-hollow.rpg-catchable .rpg-pet-sprite::before{animation:rpgRingSpin 4s linear infinite,rpgWildHollowRing 3s linear infinite;box-shadow:0 0 12px #94a3b8,inset 0 0 8px rgba(148,163,184,0.35);background:radial-gradient(circle,rgba(226,232,240,0.25) 0%,rgba(148,163,184,0.1) 55%,transparent 75%)}',
-    '.rpg-wild.rpg-hollow .catch-hint{animation:rpgCatchBounce 900ms ease-in-out infinite alternate,rpgWildHollowText 3s linear infinite;text-shadow:0 1px 2px #000,0 0 10px #94a3b8}',
-    '.rpg-wild.rpg-rainbow .label{animation:rpgWildRainbowText 3s linear infinite;text-shadow:0 1px 2px #000,0 0 6px rgba(255,255,255,0.5);font-weight:800}',
+    '.rpg-wild.rpg-hollow .rpg-catch-hint{animation:rpgCatchBounce 900ms ease-in-out infinite alternate,rpgWildHollowText 3s linear infinite;text-shadow:0 1px 2px #000,0 0 10px #94a3b8}',
+    '.rpg-wild.rpg-rainbow .rpg-nametag{animation:rpgWildRainbowText 3s linear infinite;text-shadow:0 1px 2px #000,0 0 6px rgba(255,255,255,0.5);font-weight:800}',
     '.rpg-wild.rpg-rainbow.rpg-catchable .rpg-pet-sprite::before{animation:rpgRingSpin 4s linear infinite,rpgWildRainbowRing 3s linear infinite;box-shadow:0 0 14px #ff69b4;background:conic-gradient(from 0deg,rgba(255,85,85,0.35),rgba(255,170,0,0.35),rgba(255,234,0,0.35),rgba(85,255,119,0.35),rgba(0,230,255,0.35),rgba(168,85,247,0.35),rgba(255,105,180,0.35),rgba(255,85,85,0.35))}',
-    '.rpg-wild.rpg-rainbow .catch-hint{animation:rpgCatchBounce 900ms ease-in-out infinite alternate,rpgWildRainbowText 3s linear infinite;text-shadow:0 1px 2px #000,0 0 8px rgba(255,255,255,0.5)}',
+    '.rpg-wild.rpg-rainbow .rpg-catch-hint{animation:rpgCatchBounce 900ms ease-in-out infinite alternate,rpgWildRainbowText 3s linear infinite;text-shadow:0 1px 2px #000,0 0 8px rgba(255,255,255,0.5)}',
     // Match the wild-label color-cycle animation on roamer labels for each variant.
-    '.rpg-roam.rpg-shiny .label{animation:rpgWildShinyText 3s linear infinite;text-shadow:0 1px 2px #000,0 0 6px #facc15;font-weight:800}',
-    '.rpg-roam.rpg-hollow .label{animation:rpgWildHollowText 3s linear infinite;text-shadow:0 1px 2px #000,0 0 6px #94a3b8;font-weight:800}',
-    '.rpg-roam.rpg-rainbow .label{animation:rpgWildRainbowText 3s linear infinite;text-shadow:0 1px 2px #000,0 0 6px rgba(255,255,255,0.5);font-weight:800}',
+    '.rpg-roam.rpg-shiny .rpg-nametag{animation:rpgWildShinyText 3s linear infinite;text-shadow:0 1px 2px #000,0 0 6px #facc15;font-weight:800}',
+    '.rpg-roam.rpg-hollow .rpg-nametag{animation:rpgWildHollowText 3s linear infinite;text-shadow:0 1px 2px #000,0 0 6px #94a3b8;font-weight:800}',
+    '.rpg-roam.rpg-rainbow .rpg-nametag{animation:rpgWildRainbowText 3s linear infinite;text-shadow:0 1px 2px #000,0 0 6px rgba(255,255,255,0.5);font-weight:800}',
     '@keyframes rpgWildShinyRing{0%,100%{border-color:#fde68a}25%{border-color:#facc15}50%{border-color:#fbbf24}75%{border-color:#f59e0b}}',
     '@keyframes rpgWildShinyText{0%,100%{color:#fde68a}25%{color:#facc15}50%{color:#fbbf24}75%{color:#f59e0b}}',
     '@keyframes rpgWildHollowRing{0%,100%{border-color:#f8fafc}25%{border-color:#e0e7ff}50%{border-color:#cbd5e1}75%{border-color:#94a3b8}}',
@@ -816,20 +817,20 @@
     '.rpg-dex-mini-rainbow.owned{background:conic-gradient(from 0deg,#ff5555,#ffaa00,#ffff55,#55ff77,#55ccff,#aa66ff,#ff66cc,#ff5555);border-color:#fff;box-shadow:0 0 4px rgba(255,255,255,0.6),0 0 8px rgba(255,105,180,0.5);animation:rpgRainbowBadge 3s linear infinite}',
     '@keyframes rpgRainbowBadge{0%{filter:hue-rotate(0deg)}100%{filter:hue-rotate(360deg)}}',
     '.rpg-dex-card img{width:56px;height:56px;object-fit:cover;border-radius:6px;display:block;margin:0 auto}',
-    '.rpg-dex-card .n{font-size:11px;font-weight:600;margin-top:5px;line-height:1.2;color:#eee}',
-    '.rpg-dex-card .c{font-size:9px;color:#aaa;margin-top:2px;line-height:1.2}',
+    '.rpg-dex-card .rpg-n{font-size:11px;font-weight:600;margin-top:5px;line-height:1.2;color:#eee}',
+    '.rpg-dex-card .rpg-c{font-size:9px;color:#aaa;margin-top:2px;line-height:1.2}',
     '.rpg-dex-card.rpg-dex-silhouette img{filter:brightness(0) opacity(0.35)}',
-    '.rpg-dex-card.rpg-dex-silhouette .n{color:#555}',
+    '.rpg-dex-card.rpg-dex-silhouette .rpg-n{color:#555}',
     '.rpg-dex-count{text-align:center;font-size:14px;color:#ffd166;margin:-4px 0 12px;font-weight:600;letter-spacing:0.8px}',
     '.rpg-release-prompt{position:fixed;z-index:2147483500;background:rgba(20,20,28,0.98);border:1.5px solid #dc2626;border-radius:8px;padding:12px 14px;box-shadow:0 8px 24px rgba(0,0,0,0.7);min-width:200px;transform:translate(-50%,-100%);color:#eee;font-size:12px;animation:rpgReleaseFadeIn 140ms ease-out;backdrop-filter:blur(3px)}',
-    '.rpg-release-prompt .t{font-weight:700;margin-bottom:2px;color:#fef2f2}',
-    '.rpg-release-prompt .w{color:#a3a3a3;font-size:10px;margin-bottom:10px}',
-    '.rpg-release-prompt .b{display:flex;gap:6px;justify-content:flex-end}',
+    '.rpg-release-prompt .rpg-t{font-weight:700;margin-bottom:2px;color:#fef2f2}',
+    '.rpg-release-prompt .rpg-w{color:#a3a3a3;font-size:10px;margin-bottom:10px}',
+    '.rpg-release-prompt .rpg-b{display:flex;gap:6px;justify-content:flex-end}',
     '.rpg-release-prompt button{padding:4px 12px;border-radius:4px;cursor:pointer;font-size:11px;font-weight:700;border:1px solid;letter-spacing:0.3px}',
-    '.rpg-release-prompt .cancel{background:#2a2a36;color:#ccc;border-color:#444}',
-    '.rpg-release-prompt .cancel:hover{background:#3a3a48;color:#fff}',
-    '.rpg-release-prompt .confirm{background:#dc2626;color:#fff;border-color:#b91c1c}',
-    '.rpg-release-prompt .confirm:hover{background:#ef4444}',
+    '.rpg-release-prompt .rpg-cancel{background:#2a2a36;color:#ccc;border-color:#444}',
+    '.rpg-release-prompt .rpg-cancel:hover{background:#3a3a48;color:#fff}',
+    '.rpg-release-prompt .rpg-confirm{background:#dc2626;color:#fff;border-color:#b91c1c}',
+    '.rpg-release-prompt .rpg-confirm:hover{background:#ef4444}',
     '@keyframes rpgReleaseFadeIn{from{opacity:0;transform:translate(-50%,calc(-100% + 8px))}to{opacity:1;transform:translate(-50%,-100%)}}',
     // ── Catch celebration effects ────────────────────────────────
     '.rpg-particle{position:fixed;width:8px;height:8px;border-radius:50%;pointer-events:none;z-index:2147483500;box-shadow:0 0 4px currentColor;transform:translate(-50%,-50%);animation-name:rpgParticleFly;animation-timing-function:cubic-bezier(0.15,0.7,0.4,1);animation-fill-mode:forwards}',
@@ -841,7 +842,7 @@
     '.rpg-panel-shake{animation:rpgPanelShake 700ms cubic-bezier(0.36,0.07,0.19,0.97) both}',
     '@keyframes rpgPanelShake{10%,90%{transform:translate3d(-1px,0,0)}20%,80%{transform:translate3d(2px,0,0)}30%,50%,70%{transform:translate3d(-4px,0,0)}40%,60%{transform:translate3d(4px,0,0)}}',
     '.rpg-menu.rpg-menu-pet{max-height:42vh;width:340px;max-width:340px;min-width:340px;box-sizing:border-box}',
-    '.rpg-reserve{position:fixed;right:364px;bottom:110px;z-index:2147483001;background:rgba(20,20,28,0.45);border:1px solid #3b3b48;border-radius:12px;padding:10px;color:#eee;width:150px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.6);box-sizing:border-box;overflow:hidden;backdrop-filter:blur(2px)}',
+    '.rpg-reserve{font-size:13px;line-height:1.4;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;position:fixed;right:364px;bottom:110px;z-index:2147483001;background:rgba(20,20,28,0.45);border:1px solid #3b3b48;border-radius:12px;padding:10px;color:#eee;width:150px;text-align:center;box-shadow:0 10px 30px rgba(0,0,0,0.6);box-sizing:border-box;overflow:hidden;backdrop-filter:blur(2px)}',
     '.rpg-reserve::before{content:"";position:absolute;inset:0;background-image:var(--rpg-banner-img,none);background-size:cover;background-position:center;background-repeat:no-repeat;opacity:0.35;pointer-events:none;border-radius:inherit;z-index:0}',
     '.rpg-reserve > *{position:relative;z-index:1}',
     '.rpg-reserve-title{font-size:11px;color:#ffd166;letter-spacing:1px;font-weight:800;margin-bottom:2px}',
@@ -1038,13 +1039,13 @@
       const unlocked = state.player.level >= slot.unlockLevel;
       const idx = i;
       if (!unlocked) {
-        const locked = $('div', { class: 'rpg-slot pet rpg-slot-locked', title: 'Unlocks at Level ' + slot.unlockLevel });
+        const locked = $('div', { class: 'rpg-slot rpg-pet-slot rpg-slot-locked', title: 'Unlocks at Level ' + slot.unlockLevel });
         locked.appendChild($('div', { class: 'rpg-lock-label', html: 'Lv' + slot.unlockLevel }));
         el.leftSlot.appendChild(locked);
         continue;
       }
       const inst = instanceById(state.equip.petInstanceIds[idx]);
-      const petSlot = $('div', { class: 'rpg-slot pet', title: 'Click to assign pet', onclick: () => openMenu('pet', idx) });
+      const petSlot = $('div', { class: 'rpg-slot rpg-pet-slot', title: 'Click to assign pet', onclick: () => openMenu('pet', idx) });
       if (inst) {
         const p = petById(inst.petId);
         if (p) {
@@ -1198,9 +1199,9 @@
         style: { left: mouseX + 'px', top: (mouseY - 8) + 'px' },
         onmousedown: (e) => e.stopPropagation(),
       });
-      p.appendChild($('div', { class: 't', html: 'Release ' + name + '?' }));
-      p.appendChild($('div', { class: 'w', html: 'This cannot be undone.' }));
-      const row = $('div', { class: 'b' });
+      p.appendChild($('div', { class: 'rpg-t', html: 'Release ' + name + '?' }));
+      p.appendChild($('div', { class: 'rpg-w', html: 'This cannot be undone.' }));
+      const row = $('div', { class: 'rpg-b' });
       const cleanup = (result) => {
         document.removeEventListener('mousedown', outside, true);
         window.removeEventListener('keydown', onKey, true);
@@ -1209,8 +1210,8 @@
       };
       const outside = (e) => { if (!p.contains(e.target)) cleanup(false); };
       const onKey = (e) => { if (e.key === 'Escape') cleanup(false); };
-      row.appendChild($('button', { class: 'cancel', html: 'Cancel', onclick: (e) => { e.stopPropagation(); cleanup(false); } }));
-      row.appendChild($('button', { class: 'confirm', html: 'Release', onclick: (e) => { e.stopPropagation(); cleanup(true); } }));
+      row.appendChild($('button', { class: 'rpg-cancel', html: 'Cancel', onclick: (e) => { e.stopPropagation(); cleanup(false); } }));
+      row.appendChild($('button', { class: 'rpg-confirm', html: 'Release', onclick: (e) => { e.stopPropagation(); cleanup(true); } }));
       p.appendChild(row);
       // Attach to menuEl if present so menu-dismiss ignores clicks inside the
       // prompt; otherwise attach to body.
@@ -1481,8 +1482,8 @@
         }
       });
       emptyItem.appendChild($('div', { html: '\u2715', style: { fontSize: '28px', color: '#555', height: '52px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '300' } }));
-      emptyItem.appendChild($('div', { class: 'n', html: 'Empty' }));
-      emptyItem.appendChild($('div', { class: 'l', html: '\u2014' }));
+      emptyItem.appendChild($('div', { class: 'rpg-n', html: 'Empty' }));
+      emptyItem.appendChild($('div', { class: 'rpg-l', html: '\u2014' }));
       grid.appendChild(emptyItem);
 
       const VARIANT_TIER = { normal: 0, shiny: 1, hollow: 2, rainbow: 3 };
@@ -1564,8 +1565,8 @@
         });
         item.appendChild(delBtn);
         item.appendChild($('img', { src: petImg(p, v) }));
-        item.appendChild($('div', { class: 'n', html: p.name }));
-        item.appendChild($('div', { class: 'l', html: variantRarityHTML(v, p.rarity) }));
+        item.appendChild($('div', { class: 'rpg-n', html: p.name }));
+        item.appendChild($('div', { class: 'rpg-l', html: variantRarityHTML(v, p.rarity) }));
         if (inOtherSlot) item.appendChild($('div', { class: 'rpg-in-slot-tag', html: 'Slot ' + (assignedTo + 1) }));
         grid.appendChild(item);
       }
@@ -1617,8 +1618,8 @@
       // Middle: image
       card.appendChild($('img', { src: p.img }));
       // Bottom: name + rarity/count
-      card.appendChild($('div', { class: 'n', html: owned ? p.name : '???' }));
-      card.appendChild($('div', { class: 'c', html: owned ? ('\u00D7' + anyCount + ' \u00B7 ' + rarityHTML(p.rarity)) : '\u2014' }));
+      card.appendChild($('div', { class: 'rpg-n', html: owned ? p.name : '???' }));
+      card.appendChild($('div', { class: 'rpg-c', html: owned ? ('\u00D7' + anyCount + ' \u00B7 ' + rarityHTML(p.rarity)) : '\u2014' }));
       grid.appendChild(card);
     }
     inner.appendChild(grid);
@@ -2535,7 +2536,7 @@
     const v = variantOf(inst);
     const cls = 'rpg-roam' + variantClassStr(p, v);
     const el = $('div', { class: cls });
-    el.appendChild($('div', { class: 'label', html: p.name }));
+    el.appendChild($('div', { class: 'rpg-nametag', html: p.name }));
     const roamImgUrl = petImg(p, v);
     const roamPetBox = $('div', { class: 'rpg-pet-sprite' });
     roamPetBox.style.setProperty('--rpg-pet-mask', 'url("' + roamImgUrl + '")');
@@ -2658,13 +2659,13 @@
     const cls = 'rpg-wild rpg-catchable' + variantClassStr(wildPet, wildVariant) + (special ? ' rpg-wild-special' : '');
     wildEl = $('div', { class: cls, title: 'Click to attempt catch!', onclick: attemptCatch });
     const vLabel = special ? (variantBadge(wildVariant) + ' WILD ' + variantLabel(wildVariant).toUpperCase() + ' ' + wildPet.name + '!') : ('WILD ' + wildPet.name + '!');
-    wildEl.appendChild($('div', { class: 'catch-hint', html: 'CATCH!' }));
+    wildEl.appendChild($('div', { class: 'rpg-catch-hint', html: 'CATCH!' }));
     const wildImgUrl = petImg(wildPet, wildVariant);
     const petBox = $('div', { class: 'rpg-pet-sprite' });
     petBox.style.setProperty('--rpg-pet-mask', 'url("' + wildImgUrl + '")');
     petBox.appendChild($('img', { src: wildImgUrl }));
     wildEl.appendChild(petBox);
-    wildEl.appendChild($('div', { class: 'label', html: vLabel }));
+    wildEl.appendChild($('div', { class: 'rpg-nametag', html: vLabel }));
     wildEl.style.setProperty('--rpg-scale', String(rarityScale(wildPet.rarity)));
     wildEl.style.setProperty('--rpg-catch-scale', String(rarityCatchScale(wildPet.rarity)));
     wildEl.style.setProperty('--rpg-rarity-color', (RARITY_META[wildPet.rarity] && RARITY_META[wildPet.rarity].color) || 'gold');
@@ -2798,8 +2799,8 @@
         }
       });
       card.appendChild($('img', { src: p.img }));
-      card.appendChild($('div', { class: 'n', html: p.name }));
-      card.appendChild($('div', { class: 'r', html: rarityHTML(p.rarity) }));
+      card.appendChild($('div', { class: 'rpg-n', html: p.name }));
+      card.appendChild($('div', { class: 'rpg-r', html: rarityHTML(p.rarity) }));
       choices.appendChild(card);
     }
     inner.appendChild(choices);
@@ -2839,8 +2840,72 @@
     document.addEventListener('visibilitychange', () => { if (!document.hidden) tick(); });
   };
 
+  // ================================================================
+  // ONE-SHOT IMPORT FROM APM RPG v1.x
+  //
+  // When PetRPG (v2+) coexists with the old "APM RPG" v1.x userscript on the
+  // same page, we can pull the old script's state via its page bridge that it
+  // exposes as `window.APM_RPG` (a Promise-returning proxy backed by the old
+  // sandbox's storage). We poll for the bridge briefly, read state, write it
+  // into PetRPG's own storage, and set a permanent flag so this never runs
+  // again — no matter how many times PetRPG boots.
+  //
+  // If the old script isn't on this page (any non-EAM/PTP page since v1.x
+  // was pinned to those hosts), we quietly do nothing; a future boot on a
+  // page where both scripts run will pick it up.
+  // ================================================================
+  const importFromApmRpgBridge = async () => {
+    if (load(K.apmMigrated, false)) return;
+    const pwin = (typeof unsafeWindow !== 'undefined' && unsafeWindow) ? unsafeWindow : window;
+    // Poll for up to 10 seconds for the old script's page bridge to appear.
+    // Its bridge script tag runs at document-start; usually available almost
+    // immediately, but frames/CSP can delay it.
+    let bridge = null;
+    for (let i = 0; i < 20; i++) {
+      try {
+        const b = pwin && pwin.APM_RPG;
+        if (b && b.__bridge && typeof b === 'object') { bridge = b; break; }
+      } catch (e) {}
+      await new Promise(r => setTimeout(r, 500));
+    }
+    if (!bridge) return;
+    try {
+      // .state on the bridge is a getter returning a Promise (see old script
+      // v1.6.0 injectPageBridge). Await it directly.
+      const oldState = await bridge.state;
+      if (!oldState || typeof oldState !== 'object') {
+        console.warn('[PetRPG] APM RPG bridge returned no state');
+        return;
+      }
+      let slices = 0;
+      if (oldState.player     && typeof oldState.player === 'object')     { save(K.player,     oldState.player);     slices++; }
+      if (Array.isArray(oldState.collection))                             { save(K.collection, oldState.collection); slices++; }
+      if (oldState.equip      && typeof oldState.equip === 'object')      { save(K.equip,      oldState.equip);      slices++; }
+      if (Array.isArray(oldState.caughtLog))                              { save(K.caughtLog,  oldState.caughtLog);  slices++; }
+      // If the old script had any player state, suppress the first-run
+      // starter modal + how-to modal on the new install.
+      if (slices > 0) {
+        writeRaw(K.starter, '1');
+        writeRaw(K.howto,   '1');
+      }
+      // Set the permanent guard flag BEFORE reload so the reloaded instance
+      // sees the flag and doesn't re-import (even though re-import is
+      // idempotent-ish, we'd overwrite any new play that happened in the
+      // brief window before reload).
+      save(K.apmMigrated, true);
+      console.log('[PetRPG] Imported ' + slices + ' state slice(s) from APM RPG v1.x. Reloading to apply.');
+      setTimeout(() => { try { location.reload(); } catch (e) {} }, 500);
+    } catch (e) {
+      console.warn('[PetRPG] APM RPG bridge import failed:', e);
+      // Don't set the flag on failure — try again next boot.
+    }
+  };
+
   const boot = () => {
     console.log('[PetRPG] v' + LOCAL_VERSION + ' loaded');
+    // Fire-and-forget: check for a co-running APM RPG v1.x bridge and pull
+    // its state on first successful contact. See importFromApmRpgBridge().
+    importFromApmRpgBridge();
     setupMultiTabSync();
     bumpInstalledVersion();
     loadUpdateCache();
