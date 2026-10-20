@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         APM RPG
 // @namespace    https://w.amazon.com/bin/view/Users/baijosis/APM-RPG/
-// @version      2.0.12
+// @version      2.0.13
 // @description  Collect and level up roaming pets while you browse.
 // @author       baijosis
 // @icon         https://raw.githubusercontent.com/josiahbailey/APM_RPG/main/icon.png
@@ -152,7 +152,7 @@
 
 
   const xpToNextLevel = (level) => Math.floor(100 * Math.pow(level, 1.35));
-  const WILD_SPAWN_CHANCE  = 0.025; // rolled once per page load / SPA nav
+  const WILD_SPAWN_CHANCE  = 0.075; // rolled once per page load / SPA nav (3x boost)
   const CATCHERS_PER_SPAWN = 3;
   // Hosted at https://github.com/josiahbailey/APM_RPG (public GitHub).
   // Same URL for @updateURL and @downloadURL — Tampermonkey only reads the
